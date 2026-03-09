@@ -355,7 +355,7 @@ if __name__ == '__main__':
         'test': 500
     }
 
-    seed = 67
+    seed = random.randint(0, 1000)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
