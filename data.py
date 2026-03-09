@@ -338,7 +338,7 @@ class SoundFieldDataset(Dataset):
         lr_low = torch.from_numpy(arr_lr).float()
 
         # ISOBEL-style scaling (Kristoffersen et al. 2021)
-        slice_max = torch.max(torch.abs(lr_low))
+        slice_max = torch.max(torch.abs(gt_hr))
         # scales the values into the [-1, 1] range
         gt_hr = gt_hr / slice_max
         lr_low = lr_low / slice_max
