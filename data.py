@@ -14,14 +14,15 @@ import gc
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lowres', type=int, default=8)
-    parser.add_argument('--highres', type=int, default=64)
-    parser.add_argument('--maxfreq', type=int, default=1000)
+    parser.add_argument('--lowres', type=int, default=4)
+    parser.add_argument('--highres', type=int, default=32)
+    parser.add_argument('--maxfreq', type=int, default=500)
     parser.add_argument('--len_rir', type=int, default=2048)
     parser.add_argument('--n_fft', type=int, default=2048)
     parser.add_argument('--fsampl', type=int, default=16000)
     parser.add_argument('--out_dir', type=str, default='dataset_4to32_500')
-    parser.add_argument('--generate', type=int, choices=[0,1], default=1)
+    parser.add_argument('--generate', type=int, choices=[0,1], default=0)
+    parser.add_argument('--show', type=int, choices=[0,1], default=1)
     parser.add_argument('--seed', type=int, default=None)
 
     arguments, _ = parser.parse_known_args()
@@ -372,3 +373,41 @@ if __name__ == '__main__':
                                                        output_dir=target_dir,
                                                        basename=f"sound_field_{dataset_type}")
             metadata_store[dataset_type] = metadata
+
+
+    for dataset_type in dataset_specs.keys():
+        if dataset_type not in metadata_store:
+            metadata_path = os.path.join(out_dir, dataset_type, 'metadata.json')
+            if os.path.exists(metadata_path):
+                metadata_store[dataset_type] = json.load(open(metadata_path, 'r'))
+                print(f"Recovered metadata for {dataset_type} from {metadata_path}")
+            else:
+                print(f"Warning: No metadata found for {dataset_type} at {metadata_path}")
+
+    train_meta = metadata_store.get('train')
+    if train_meta and train_meta.get('n_rooms', 0) > 0 and show:
+        import matplotlib.pyplot as plt
+
+        train_dir = os.path.join(out_dir, 'train')
+        hr_memmap = np.lib.format.open_memmap(os.path.join(train_dir, train_meta['npy_hr']), mode='r')
+        lr_memmap = np.lib.format.open_memmap(os.path.join(train_dir, train_meta['npy_lr']), mode='r')
+
+        chosen_idx = random.randint(0, int(train_meta['n_rooms']) - 1)
+        bin_idx = random.randint(0, int(train_meta['bins_per_room']) - 1)
+
+        hr_bin = torch.from_numpy(np.array(hr_memmap[chosen_idx, bin_idx]))  # [2, H_hr, W_hr]
+        lr_bin = torch.from_numpy(np.array(lr_memmap[chosen_idx, bin_idx]))  # [2, H_lr, W_lr]
+
+        print(f"Displaying room {chosen_idx}, bin {bin_idx}")
+
+        for title, mag in [
+            (f"Low-res magnitude (room {chosen_idx}, bin {bin_idx})",  torch.sqrt(lr_bin[0]**2 + lr_bin[1]**2).numpy()),
+            (f"High-res magnitude (room {chosen_idx}, bin {bin_idx})", torch.sqrt(hr_bin[0]**2 + hr_bin[1]**2).numpy()),
+        ]:
+            plt.figure()
+            plt.title(title)
+            plt.imshow(mag, origin='lower')
+            plt.axis('off')
+            plt.show()
+    else:
+        print("No train rooms available to display. Make sure that metadata.json files exist.")
