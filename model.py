@@ -1,5 +1,6 @@
 from sr3_modules.unet import UNet
 import torch.nn as nn
+import torch
 import math
 
 
@@ -18,3 +19,50 @@ class SR3UNet(nn.Module):
 
     def forward(self, x_concat, noise_level):
         return self.unet(x_concat, noise_level)
+
+
+if __name__ == "__main__":
+
+    def count_params(module):
+        total = sum(p.numel() for p in module.parameters())
+        trainable = sum(p.numel() for p in module.parameters() if p.requires_grad)
+        return total, trainable
+
+    def suffix(n):
+        if n >= 1_000_000_000:
+            return f"{n:,} ({n/1_000_000_000:.2f}B)"
+        if n >= 1_000_000:
+            return f"{n:,} ({n/1_000_000:.2f}M)"
+        if n >= 1_000:
+            return f"{n:,} ({n/1_000:.2f}K)"
+        return f"{n:,}"
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    model = SR3UNet(grid_res=32).to(device)
+    unet = model.unet
+
+    print("\nParameter summary")
+    print("-" * 60)
+
+    # unet
+    for name in ["noise_level_mlp", "downs", "mid", "ups", "final_conv"]:
+        sub = getattr(unet, name, None)
+        if sub is None:
+            print(f"unet.{name:16s}: <missing>")
+            continue
+        tot, trn = count_params(sub)
+        print(f"unet.{name:16s}: total {suffix(tot):>20s}   trainable {suffix(trn):>12s}")
+    print("\nEncoder")
+    for l, layer in enumerate(unet.downs):
+        tot, trn = count_params(layer)
+        print(f"  downs[{l:02d}] {type(layer).__name__:25s}: {suffix(tot):>20s}")
+    print("\nDecoder")
+    for l, layer in enumerate(unet.ups):
+        tot, trn = count_params(layer)
+        print(f"  ups[{l:02d}]   {type(layer).__name__:25s}: {suffix(tot):>20s}")
+
+    print("-" * 60)
+    model_total, model_trainable = count_params(model)
+    print(f"\n{'full model':20s}: total {suffix(model_total):>20s}   trainable {suffix(model_trainable):>12s}\n")
