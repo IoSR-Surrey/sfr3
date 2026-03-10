@@ -41,7 +41,7 @@ out_dir = args.out_dir
 
 def generate_sound_field(room_dim, mic_region, grid_res=64, lr_res=16, max_freq=1500):
     """
-    Generate an HR dense grid and an LR grid (coarse mic array).
+    Generate an HR dense grid and an LR grid.
     Returns:
       hr_tensor: torch.Tensor [num_freq_bins, 2, grid_res, grid_res]  (real/imag)
       lr_tensor: torch.Tensor [num_freq_bins, 2, lr_res, lr_res]      (real/imag)
@@ -350,7 +350,7 @@ class SoundFieldDataset(Dataset):
 
 if __name__ == '__main__':
 
-    dataset_specs = {
+    dataset_sizes = {
         'train': 5000,
         'val': 500,
         'test': 500
@@ -363,7 +363,7 @@ if __name__ == '__main__':
 
     metadata_store = {}
 
-    for dataset_type, num_rooms in dataset_specs.items():
+    for dataset_type, num_rooms in dataset_sizes.items():
         target_dir = os.path.join(out_dir, dataset_type)
         print(target_dir)
         os.makedirs(target_dir, exist_ok=True)
@@ -376,7 +376,7 @@ if __name__ == '__main__':
             metadata_store[dataset_type] = metadata
 
 
-    for dataset_type in dataset_specs.keys():
+    for dataset_type in dataset_sizes.keys():
         if dataset_type not in metadata_store:
             metadata_path = os.path.join(out_dir, dataset_type, 'metadata.json')
             if os.path.exists(metadata_path):
