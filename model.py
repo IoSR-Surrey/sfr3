@@ -43,6 +43,34 @@ if __name__ == "__main__":
     model = SR3UNet(grid_res=32).to(device)
     unet = model.unet
 
+    print("\nArchitecture")
+    print("-" * 60)
+    now_res = model.grid_res
+    print(f"  Input:       [B, 4, {now_res}, {now_res}]  (noisy HR + upsampled LR)")
+    print(f"  inner_channel: {unet.noise_level_mlp[1].in_features}")
+    print(f"\n  Encoder")
+    for i, layer in enumerate(unet.downs):
+        if hasattr(layer, 'res_block') or hasattr(layer, 'block1'):
+            print(f"    [{now_res:>4d}x{now_res:<4d}]  {type(layer).__name__}")
+        elif hasattr(layer, 'conv') and hasattr(layer, 'up'):
+            pass
+        elif isinstance(layer, torch.nn.Conv2d):
+            print(f"    [{now_res:>4d}x{now_res:<4d}]  Input conv")
+        else:
+            now_res = now_res // 2
+            print(f"    [{now_res*2:>4d}x{now_res*2:<4d}]  -> Downsample -> [{now_res}x{now_res}]")
+    print(f"\n  Bottleneck")
+    for layer in unet.mid:
+        print(f"    [{now_res:>4d}x{now_res:<4d}]  {type(layer).__name__}")
+    print(f"\n  Decoder")
+    for i, layer in enumerate(unet.ups):
+        if hasattr(layer, 'res_block') or hasattr(layer, 'block1'):
+            print(f"    [{now_res:>4d}x{now_res:<4d}]  {type(layer).__name__}")
+        elif hasattr(layer, 'up'):
+            now_res = now_res * 2
+            print(f"    [{now_res//2:>4d}x{now_res//2:<4d}]  -> Upsample   -> [{now_res}x{now_res}]")
+    print(f"  Output:      [B, 2, {now_res}, {now_res}]")
+
     print("\nParameter summary")
     print("-" * 60)
 
