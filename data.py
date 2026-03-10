@@ -1,15 +1,14 @@
 from torch.utils.data import Dataset
 import pyroomacoustics as pra
-import torch.nn.functional
 from tqdm import tqdm
 import numpy as np
 import argparse
+import shutil
 import random
 import torch
 import json
 import math
 import os
-import gc
 
 
 def parse_args():
@@ -42,11 +41,11 @@ out_dir = args.out_dir
 
 def generate_sound_field(room_dim, mic_region, grid_res=64, lr_res=16, max_freq=1500):
     """
-    Generate BOTH an HR dense grid and a physically simulated LR grid (coarse mic array).
+    Generate an HR dense grid and an LR grid (coarse mic array).
     Returns:
       hr_tensor: torch.Tensor [num_freq_bins, 2, grid_res, grid_res]  (real/imag)
       lr_tensor: torch.Tensor [num_freq_bins, 2, lr_res, lr_res]      (real/imag)
-      fs, n_fft, room_dim, mic_region, rt60, source_position
+      room_dim, mic_region, rt60, source_position
     """
 
     room = None
@@ -214,7 +213,7 @@ def generate_sound_field(room_dim, mic_region, grid_res=64, lr_res=16, max_freq=
 
 def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_field_dataset', rooms_sub='dataset_rooms'):
     """
-    Generate `num_rooms` rooms and save per-room .pt files and two combined NumPy .npy memmaps inside `output_dir`.
+    Generate `num_rooms` rooms in two combined NumPy .npy memmaps inside `output_dir`.
     """
 
     os.makedirs(output_dir, exist_ok=True)
@@ -223,6 +222,8 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
 
     per_room_paths = []
     metadata_list = []
+    assert num_rooms > 0
+    bins = ch = hr_h = hr_w = lr_h = lr_w = 0
 
     for i in tqdm(range(num_rooms), desc=f"Generating {os.path.basename(output_dir)}"):
         hr_tensor, lr_tensor, room_dim, mic_region, rt60, source_position = generate_sound_field(
@@ -232,6 +233,10 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
         # remove 0Hz bin from both HR and LR
         hr_tensor_no0 = hr_tensor[1:].clone().to(torch.float32)
         lr_tensor_no0 = lr_tensor[1:].clone().to(torch.float32)
+
+        if i == 0:
+            bins, ch, hr_h, hr_w = hr_tensor_no0.shape
+            _, _, lr_h, lr_w = lr_tensor_no0.shape
 
         room_dict = {
             "hr": hr_tensor_no0,
@@ -251,11 +256,6 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
         })
 
         del hr_tensor, lr_tensor, hr_tensor_no0, lr_tensor_no0, room_dict
-        gc.collect()
-
-    first = torch.load(per_room_paths[0], map_location='cpu', weights_only=False)
-    bins, ch, hr_h, hr_w = first["hr"].shape
-    _, _, lr_h, lr_w = first["lr"].shape
 
     combined_hr_path = os.path.join(output_dir, f"{basename}_hr.npy")
     combined_lr_path = os.path.join(output_dir, f"{basename}_lr.npy")
@@ -270,7 +270,6 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
         mem_hr[i] = d["hr"].numpy()[:bins]
         mem_lr[i] = d["lr"].numpy()[:bins]
         del d
-        gc.collect()
 
     del mem_hr, mem_lr
 
@@ -294,6 +293,8 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
     }
     with open(os.path.join(output_dir, "metadata.json"), "w") as js:
         json.dump(meta, js, indent=2)
+
+    shutil.rmtree(out_rooms_dir)
 
     return meta
 
@@ -355,7 +356,7 @@ if __name__ == '__main__':
         'test': 500
     }
 
-    seed = random.randint(0, 1000)
+    seed = args.seed if args.seed is not None else random.randint(0, 1000)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -379,7 +380,8 @@ if __name__ == '__main__':
         if dataset_type not in metadata_store:
             metadata_path = os.path.join(out_dir, dataset_type, 'metadata.json')
             if os.path.exists(metadata_path):
-                metadata_store[dataset_type] = json.load(open(metadata_path, 'r'))
+                with open(metadata_path, 'r') as f:
+                    metadata_store[dataset_type] = json.load(f)
                 print(f"Recovered metadata for {dataset_type} from {metadata_path}")
             else:
                 print(f"Warning: No metadata found for {dataset_type} at {metadata_path}")
