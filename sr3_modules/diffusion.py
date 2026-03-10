@@ -67,7 +67,7 @@ class GaussianDiffusion(nn.Module):
         denoise_fn,
         image_size,
         channels=3,
-        loss_type='l1',
+        loss_type='l2',
         conditional=True,
         schedule_opt=None
     ):
@@ -85,7 +85,7 @@ class GaussianDiffusion(nn.Module):
         if self.loss_type == 'l1':
             self.loss_func = nn.L1Loss(reduction='sum').to(device)
         elif self.loss_type == 'l2':
-            self.loss_func = nn.MSELoss(reduction='sum').to(device)
+            self.loss_func = nn.MSELoss(reduction='mean').to(device)
         else:
             raise NotImplementedError()
 
