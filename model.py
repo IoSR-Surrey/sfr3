@@ -1,5 +1,6 @@
 from sr3_modules.unet import UNet
 import torch.nn as nn
+import argparse
 import torch
 import math
 
@@ -33,6 +34,10 @@ class SR3UNet(nn.Module):
 
 if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gridsize", type=int, default=32)
+    args = parser.parse_args()
+
     def count_params(module):
         total = sum(p.numel() for p in module.parameters())
         trainable = sum(p.numel() for p in module.parameters() if p.requires_grad)
@@ -50,7 +55,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    model = SR3UNet(grid_res=32).to(device)
+    model = SR3UNet(grid_res=args.gridsize).to(device)
     unet = model.unet
 
     print("\nArchitecture")
