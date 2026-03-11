@@ -50,25 +50,34 @@ if __name__ == "__main__":
     print(f"  inner_channel: {unet.noise_level_mlp[1].in_features}")
     print(f"\n  Encoder")
     for i, layer in enumerate(unet.downs):
-        if hasattr(layer, 'res_block') or hasattr(layer, 'block1'):
-            print(f"    [{now_res:>4d}x{now_res:<4d}]  {type(layer).__name__}")
-        elif hasattr(layer, 'conv') and hasattr(layer, 'up'):
-            pass
-        elif isinstance(layer, torch.nn.Conv2d):
+        if isinstance(layer, torch.nn.Conv2d):
             print(f"    [{now_res:>4d}x{now_res:<4d}]  Input conv")
+        elif hasattr(layer, 'with_attn'):
+            attn_str = " [+attn]" if layer.with_attn else ""
+            print(f"    [{now_res:>4d}x{now_res:<4d}]  ResnetBlocWithAttn{attn_str}")
         else:
             now_res = now_res // 2
             print(f"    [{now_res*2:>4d}x{now_res*2:<4d}]  -> Downsample -> [{now_res}x{now_res}]")
+
     print(f"\n  Bottleneck")
     for layer in unet.mid:
-        print(f"    [{now_res:>4d}x{now_res:<4d}]  {type(layer).__name__}")
+        if hasattr(layer, 'with_attn'):
+            attn_str = " [+attn]" if layer.with_attn else ""
+            print(f"    [{now_res:>4d}x{now_res:<4d}]  ResnetBlocWithAttn{attn_str}")
+        else:
+            print(f"    [{now_res:>4d}x{now_res:<4d}]  {type(layer).__name__}")
+
     print(f"\n  Decoder")
     for i, layer in enumerate(unet.ups):
-        if hasattr(layer, 'res_block') or hasattr(layer, 'block1'):
-            print(f"    [{now_res:>4d}x{now_res:<4d}]  {type(layer).__name__}")
+        if hasattr(layer, 'with_attn'):
+            attn_str = " [+attn]" if layer.with_attn else ""
+            print(f"    [{now_res:>4d}x{now_res:<4d}]  ResnetBlocWithAttn{attn_str}")
         elif hasattr(layer, 'up'):
             now_res = now_res * 2
             print(f"    [{now_res//2:>4d}x{now_res//2:<4d}]  -> Upsample   -> [{now_res}x{now_res}]")
+        else:
+            print(f"    [{now_res:>4d}x{now_res:<4d}]  {type(layer).__name__}")
+
     print(f"  Output:      [B, 2, {now_res}, {now_res}]")
 
     print("\nParameter summary")
