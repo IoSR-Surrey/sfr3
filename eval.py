@@ -15,10 +15,17 @@ def compute_nmse(target, prediction):
     """Returns the raw NMSE ratio (0 to 1+)."""
     return ((torch.abs(prediction - target) ** 2).sum() / (torch.norm(target, p=2) ** 2)).item()
 
+def compute_ncc(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """Returns Normalized Cross-Correlation (NCC) between estimated and ground truth."""
+    prediction = prediction.ravel()
+    target = target.ravel()
+    return torch.abs(prediction @ torch.conj(target)) / (torch.norm(prediction, p=2) * torch.norm(target, p=2))
+
 def get_metrics(gt, sr):
     nmse_raw = compute_nmse(gt, sr)
     nmse_db = 10 * np.log10(nmse_raw + 1e-15)
-    return {"NMSE_raw": nmse_raw, "NMSE_dB": nmse_db}
+    ncc = compute_ncc(gt, sr)
+    return {"NMSE_raw": nmse_raw, "NMSE_dB": nmse_db, "NCC": ncc}
 
 def complex_to_magnitude(x):
     if x.dim() == 4 and x.size(1) == 2:
@@ -27,8 +34,8 @@ def complex_to_magnitude(x):
         return torch.sqrt(real ** 2 + imag ** 2)
     return None
 
-def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="checkpoints"):
 
+def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="checkpoints"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     dataset = SoundFieldDataset(path=metadata_path)
@@ -76,8 +83,8 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
 
     m = get_metrics(gt_mag, sr_mag)
     m_bic = get_metrics(gt_mag, bicubic_out)
-    print(f"NMSE: {m['NMSE_dB']:.2f} dB")
-    print(f"Bicubic NMSE: {m_bic['NMSE_dB']:.2f} dB")
+    print(f"NMSE: {m['NMSE_dB']:.2f} dB | NCC: {m['NCC']:.2f}")
+    print(f"Bicubic NMSE: {m_bic['NMSE_dB']:.2f} dB | Bicubic NCC: {m_bic['NCC']:.2f}")
 
     fig, axes = plt.subplots(1, 4, figsize=(25, 5))
 
