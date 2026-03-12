@@ -65,11 +65,12 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
         diffusion.load_state_dict(ckpt['diffusion_state_dict'])
     diffusion.eval()
 
-    gt_hr, lr_low = dataset[sample_index]
+    gt_hr, lr_low, freq = dataset[sample_index]
 
     with torch.no_grad():
         lr_cond = model.upsample_lr(lr_low.unsqueeze(0).to(device))
-        sr_output = diffusion.super_resolution(lr_cond)
+        freq_tensor = torch.tensor([freq], dtype=torch.float32, device=device)
+        sr_output = diffusion.super_resolution({'SR': lr_cond, 'freq': freq_tensor})
         sr_output = sr_output.unsqueeze(0)
 
     gt_mag = complex_to_magnitude(gt_hr.unsqueeze(0).to(device))

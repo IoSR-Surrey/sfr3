@@ -28,8 +28,8 @@ class SR3UNet(nn.Module):
     def upsample_lr(self, lr_lowres):
         return self.upsample_input(lr_lowres)
 
-    def forward(self, x_concat, noise_level):
-        return self.unet(x_concat, noise_level)
+    def forward(self, x_concat, noise_level, freq):
+        return self.unet(x_concat, noise_level, freq)
 
 
 if __name__ == "__main__":
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     print("-" * 60)
     now_res = model.grid_res
     print(f"  Input:       [B, 4, {now_res}, {now_res}]  (noisy HR + upsampled LR)")
-    print(f"  inner_channel: {unet.noise_level_mlp[1].in_features}")
+    print(f"  inner_channel: {unet.cond_mlp[0].in_features // 2}")
     print(f"\n  Encoder")
     for i, layer in enumerate(unet.downs):
         if isinstance(layer, torch.nn.Conv2d):
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     print("-" * 60)
 
     # unet
-    for name in ["noise_level_mlp", "downs", "mid", "ups", "final_conv"]:
+    for name in ["cond_mlp", "downs", "mid", "ups", "final_conv"]:
         sub = getattr(unet, name, None)
         if sub is None:
             print(f"unet.{name:16s}: <missing>")

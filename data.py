@@ -344,7 +344,9 @@ class SoundFieldDataset(Dataset):
         gt_hr = gt_hr / slice_max
         lr_low = lr_low / slice_max
 
-        return gt_hr, lr_low
+        freq = (bin_index + 1) * self.fsampl / self.n_fft
+
+        return gt_hr, lr_low, freq
 
 
 

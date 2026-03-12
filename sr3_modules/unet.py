@@ -176,15 +176,18 @@ class UNet(nn.Module):
 
         if with_noise_level_emb:
             noise_level_channel = inner_channel
-            self.noise_level_mlp = nn.Sequential(
-                PositionalEncoding(inner_channel),
-                nn.Linear(inner_channel, inner_channel * 4),
+            self.noise_pos_enc = PositionalEncoding(inner_channel)
+            self.freq_pos_enc = PositionalEncoding(inner_channel)
+            self.cond_mlp = nn.Sequential(
+                nn.Linear(inner_channel * 2, inner_channel * 4),
                 Swish(),
                 nn.Linear(inner_channel * 4, inner_channel)
             )
         else:
             noise_level_channel = None
-            self.noise_level_mlp = None
+            self.noise_pos_enc = None
+            self.freq_pos_enc = None
+            self.cond_mlp = None
 
         num_mults = len(channel_mults)
         pre_channel = inner_channel
@@ -232,9 +235,13 @@ class UNet(nn.Module):
 
         self.final_conv = Block(pre_channel, default(out_channel, in_channel), groups=norm_groups)
 
-    def forward(self, x, time):
-        t = self.noise_level_mlp(time) if exists(
-            self.noise_level_mlp) else None
+    def forward(self, x, time, freq):
+        if exists(self.noise_pos_enc):
+            noise_emb = self.noise_pos_enc(time.squeeze(-1))
+            freq_emb = self.freq_pos_enc(freq)
+            t = self.cond_mlp(torch.cat([noise_emb, freq_emb], dim=-1))
+        else:
+            t = None
 
         feats = []
         for layer in self.downs:
