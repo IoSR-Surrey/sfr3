@@ -314,6 +314,12 @@ class SoundFieldDataset(Dataset):
         self.fsampl = float(meta['fs'])
         self.n_fft = int(meta['n_fft'])
 
+        self.f_min = self.fsampl / self.n_fft  # first bin (bin_index 0 + 1)
+        max_freq_idx = int(np.ceil(float(meta['max_freq']) / float(meta['fs']) * float(meta['n_fft'])))
+        self.f_max = (max_freq_idx*self.fsampl) / self.n_fft
+        self.log_f_min = math.log(self.f_min)
+        self.log_f_max = math.log(self.f_max)
+
         self.mem_hr = None
         self.mem_lr = None
 
@@ -344,16 +350,17 @@ class SoundFieldDataset(Dataset):
         gt_hr = gt_hr / slice_max
         lr_low = lr_low / slice_max
 
-        freq = (bin_index + 1) * self.fsampl / self.n_fft
-
-        return gt_hr, lr_low, freq
+        freq_raw = ((bin_index + 1) * self.fsampl) / self.n_fft
+        # log min-max norm to [0, 1000] (like ddpm timestep)
+        freq_norm = 1000.0 * (math.log(freq_raw) - self.log_f_min) / (self.log_f_max - self.log_f_min)
+        return gt_hr, lr_low, freq_norm
 
 
 
 if __name__ == '__main__':
 
     dataset_sizes = {
-        'train': 5000,
+        'train': 9000,
         'val': 500,
         'test': 500
     }

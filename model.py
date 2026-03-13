@@ -22,7 +22,7 @@ class SR3UNet(nn.Module):
         print(f"inner_channel: {inner_channel}")
         print(f"attn_res: {attn_res}")
         self.unet = UNet(in_channel=4, out_channel=2, inner_channel=inner_channel, channel_mults=channel_mults,
-            image_size=grid_res, attn_res=attn_res)
+            image_size=grid_res, attn_res=attn_res, dropout=0.2)
         self.upsample_input = nn.Upsample(size=(grid_res, grid_res), mode='bicubic', align_corners=False)
 
     def upsample_lr(self, lr_lowres):
