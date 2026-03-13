@@ -32,7 +32,7 @@ class PositionalEncoding(nn.Module):
 
 
 class FeatureWiseAffine(nn.Module):
-    def __init__(self, in_channels, out_channels, use_affine_level=False):
+    def __init__(self, in_channels, out_channels, use_affine_level=True):
         super(FeatureWiseAffine, self).__init__()
         self.use_affine_level = use_affine_level
         self.noise_func = nn.Sequential(
@@ -92,7 +92,7 @@ class Block(nn.Module):
 
 
 class ResnetBlock(nn.Module):
-    def __init__(self, dim, dim_out, noise_level_emb_dim=None, dropout=0, use_affine_level=False, norm_groups=32):
+    def __init__(self, dim, dim_out, noise_level_emb_dim=None, dropout=0, use_affine_level=True, norm_groups=32):
         super().__init__()
         self.noise_func = FeatureWiseAffine(
             noise_level_emb_dim, dim_out, use_affine_level)
