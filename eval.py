@@ -35,6 +35,27 @@ def complex_to_magnitude(x):
         return torch.sqrt(real ** 2 + imag ** 2)
     return None
 
+def plot_training(checkpoints):
+
+    with open(rf'{checkpoints}\logs\training_history.json', 'r') as file:
+        data = json.load(file)
+
+    epochs = [entry['epoch'] for entry in data['epochs']]
+    train_losses = [entry['train_loss'] for entry in data['epochs']]
+    val_losses = [entry['val_loss'] for entry in data['epochs']]
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, train_losses, label='Train Loss', color='blue', linewidth=2)
+    plt.plot(epochs, val_losses, label='Validation Loss', color='orange', linewidth=2)
+    plt.title('Train and Val losses', fontsize=14)
+    plt.xlabel('Epoch', fontsize=12)
+    plt.ylabel('Loss', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(fontsize=12)
+    plt.yscale('log')
+    plt.tight_layout()
+    plt.show()
+
 
 def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="checkpoints"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -59,7 +80,7 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     diffusion.set_new_noise_schedule(
         {'schedule': 'cosine', 'n_timestep': 1000, 'linear_start': 1e-4, 'linear_end': 2e-2}, device)
 
-    ckpt_path = os.path.join(checkpoint_dir, "best_model.pth")
+    ckpt_path = os.path.join(checkpoint_dir, "latest_model.pth")
     if os.path.exists(ckpt_path):
         ckpt = torch.load(ckpt_path, map_location=device)
         model.load_state_dict(ckpt['model_state_dict'])
@@ -124,7 +145,7 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
     diffusion.set_new_noise_schedule(
         {'schedule': 'cosine', 'n_timestep': 1000, 'linear_start': 1e-4, 'linear_end': 2e-2}, device)
 
-    ckpt_path = os.path.join(checkpoint_dir, "best_model.pth")
+    ckpt_path = os.path.join(checkpoint_dir, "latest_model.pth")
     if os.path.exists(ckpt_path):
         ckpt = torch.load(ckpt_path, map_location=device)
         if 'model_state_dict' in ckpt:
@@ -275,5 +296,6 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
-    #evaluation(args.metadata, args.checkpoint_dir)
+    plot_training(args.checkpoint_dir)
+    evaluation(args.metadata, args.checkpoint_dir)
     frequency_analysis(args.metadata, args.checkpoint_dir, num_rooms=1, bin_step=30)
