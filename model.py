@@ -58,47 +58,8 @@ if __name__ == "__main__":
     model = SR3UNet(grid_res=args.gridsize).to(device)
     unet = model.unet
 
-    print("\nArchitecture")
+    print("\nModel parameters")
     print("-" * 60)
-    now_res = model.grid_res
-    print(f"  Input:       [B, 4, {now_res}, {now_res}]  (noisy HR + upsampled LR)")
-    print(f"  inner_channel: {unet.cond_mlp[0].in_features // 2}")
-    print(f"\n  Encoder")
-    for i, layer in enumerate(unet.downs):
-        if isinstance(layer, torch.nn.Conv2d):
-            print(f"    [{now_res:>4d}x{now_res:<4d}]  Input conv")
-        elif hasattr(layer, 'with_attn'):
-            attn_str = " [+attn]" if layer.with_attn else ""
-            print(f"    [{now_res:>4d}x{now_res:<4d}]  ResnetBlocWithAttn{attn_str}")
-        else:
-            now_res = now_res // 2
-            print(f"    [{now_res*2:>4d}x{now_res*2:<4d}]  -> Downsample -> [{now_res}x{now_res}]")
-
-    print(f"\n  Bottleneck")
-    for layer in unet.mid:
-        if hasattr(layer, 'with_attn'):
-            attn_str = " [+attn]" if layer.with_attn else ""
-            print(f"    [{now_res:>4d}x{now_res:<4d}]  ResnetBlocWithAttn{attn_str}")
-        else:
-            print(f"    [{now_res:>4d}x{now_res:<4d}]  {type(layer).__name__}")
-
-    print(f"\n  Decoder")
-    for i, layer in enumerate(unet.ups):
-        if hasattr(layer, 'with_attn'):
-            attn_str = " [+attn]" if layer.with_attn else ""
-            print(f"    [{now_res:>4d}x{now_res:<4d}]  ResnetBlocWithAttn{attn_str}")
-        elif hasattr(layer, 'up'):
-            now_res = now_res * 2
-            print(f"    [{now_res//2:>4d}x{now_res//2:<4d}]  -> Upsample   -> [{now_res}x{now_res}]")
-        else:
-            print(f"    [{now_res:>4d}x{now_res:<4d}]  {type(layer).__name__}")
-
-    print(f"  Output:      [B, 2, {now_res}, {now_res}]")
-
-    print("\nParameter summary")
-    print("-" * 60)
-
-    # unet
     for name in ["cond_mlp", "downs", "mid", "ups", "final_conv"]:
         sub = getattr(unet, name, None)
         if sub is None:
@@ -114,7 +75,6 @@ if __name__ == "__main__":
     for l, layer in enumerate(unet.ups):
         tot, trn = count_params(layer)
         print(f"  ups[{l:02d}]   {type(layer).__name__:25s}: {suffix(tot):>20s}")
-
     print("-" * 60)
     model_total, model_trainable = count_params(model)
     print(f"\n{'full model':20s}: total {suffix(model_total):>20s}   trainable {suffix(model_trainable):>12s}\n")
