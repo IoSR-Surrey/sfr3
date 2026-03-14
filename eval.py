@@ -35,24 +35,38 @@ def complex_to_magnitude(x):
         return torch.sqrt(real ** 2 + imag ** 2)
     return None
 
-def plot_training(checkpoints):
 
+def plot_training(checkpoints, show_lr=True):
     with open(rf'{checkpoints}\logs\training_history.json', 'r') as file:
         data = json.load(file)
 
     epochs = [entry['epoch'] for entry in data['epochs']]
     train_losses = [entry['train_loss'] for entry in data['epochs']]
     val_losses = [entry['val_loss'] for entry in data['epochs']]
+    lrs = [entry['lr'] for entry in data['epochs']]
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(epochs, train_losses, label='Train Loss', color='blue', linewidth=2)
-    plt.plot(epochs, val_losses, label='Validation Loss', color='orange', linewidth=2)
-    plt.title('Train and Val losses', fontsize=14)
-    plt.xlabel('Epoch', fontsize=12)
-    plt.ylabel('Loss', fontsize=12)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.legend(fontsize=12)
-    plt.yscale('log')
+    nrows = 2 if show_lr else 1
+    fig, axes = plt.subplots(nrows, 1, figsize=(12, 5 * nrows), sharex=True, squeeze=False)
+
+    ax1 = axes[0, 0]
+    ax1.plot(epochs, train_losses, label='Train Loss', color='blue', alpha=0.7, linewidth=2)
+    ax1.plot(epochs, val_losses, label='Validation Loss', color='orange', alpha=0.7, linewidth=2)
+    ax1.set_title('Train and Val losses', fontsize=15)
+    ax1.set_ylabel('Loss', fontsize=12)
+    ax1.set_yscale('log')
+    ax1.grid(True, linestyle='--', alpha=0.5)
+    ax1.legend(fontsize=12)
+
+    if show_lr:
+        ax2 = axes[1, 0]
+        ax2.plot(epochs, lrs, label='Learning Rate', color='red', linewidth=2, drawstyle='steps-post')
+        ax2.set_title('Learning Rate over epochs', fontsize=15)
+        ax2.set_ylabel('Learning Rate', fontsize=12)
+        ax2.set_yscale('log')
+        ax2.grid(True, linestyle='--', alpha=0.5)
+        ax2.legend(fontsize=12)
+
+    axes[-1, 0].set_xlabel('Epoch', fontsize=12)
     plt.tight_layout()
     plt.show()
 
@@ -312,6 +326,6 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
-    plot_training(args.checkpoint_dir)
+    plot_training(args.checkpoint_dir, show_lr=True)
     evaluation(args.metadata, args.checkpoint_dir)
     frequency_analysis(args.metadata, args.checkpoint_dir, num_rooms=10, bin_step=2, run_inference=False)
