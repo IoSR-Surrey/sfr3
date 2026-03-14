@@ -126,124 +126,164 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     plt.savefig(os.path.join(eval_dir, "gtgen_comparison.pdf"))
     plt.show()
 
-def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=None, seed=42):
+
+def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=None, seed=42, run_inference=False):
     """
     Run frequency analysis and compare diffusion SR to baselines
-
-    Args:
-        metadata_path (str): path to the dataset metadata JSON.
-        num_rooms (int or None): If None, use all rooms. If int, randomly select `num_rooms`
-                                 distinct rooms to use for the analysis (no seed).
-        bin_step (int or None): If None, process ALL bins. If int>0, process every `bin_step`-th bin.
     """
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    eval_dir = os.path.join(checkpoint_dir, "eval")
+    os.makedirs(eval_dir, exist_ok=True)
+    json_path = os.path.join(eval_dir, "freq_analysis.json")
 
-    dataset = SoundFieldDataset(path=metadata_path)
-    model = SR3UNet(grid_res=dataset.hr_res).to(device)
-    diffusion = GaussianDiffusion(denoise_fn=model, image_size=dataset.hr_res, channels=2).to(device)
-    diffusion.set_new_noise_schedule(
-        {'schedule': 'cosine', 'n_timestep': 1000, 'linear_start': 1e-4, 'linear_end': 2e-2}, device)
+    if not os.path.exists(json_path):
+        run_inference = True
 
-    ckpt_path = os.path.join(checkpoint_dir, "latest_model.pth")
-    if os.path.exists(ckpt_path):
-        ckpt = torch.load(ckpt_path, map_location=device)
-        if 'model_state_dict' in ckpt:
-            model.load_state_dict(ckpt['model_state_dict'])
-        if 'diffusion_state_dict' in ckpt:
-            diffusion.load_state_dict(ckpt['diffusion_state_dict'])
-    model.eval()
-    diffusion.eval()
+    if run_inference:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    with open(metadata_path, "r") as f:
-        meta_json = json.load(f)
+        dataset = SoundFieldDataset(path=metadata_path)
+        model = SR3UNet(grid_res=dataset.hr_res).to(device)
+        diffusion = GaussianDiffusion(denoise_fn=model, image_size=dataset.hr_res, channels=2).to(device)
+        diffusion.set_new_noise_schedule(
+            {'schedule': 'cosine', 'n_timestep': 1000, 'linear_start': 1e-4, 'linear_end': 2e-2}, device)
 
-    fs = meta_json.get("fs")
-    n_fft = meta_json.get("n_fft")
+        ckpt_path = os.path.join(checkpoint_dir, "latest_model.pth")
+        if os.path.exists(ckpt_path):
+            ckpt = torch.load(ckpt_path, map_location=device)
+            if 'model_state_dict' in ckpt:
+                model.load_state_dict(ckpt['model_state_dict'])
+            if 'diffusion_state_dict' in ckpt:
+                diffusion.load_state_dict(ckpt['diffusion_state_dict'])
+        model.eval()
+        diffusion.eval()
 
-    k_all = np.arange(1, dataset.bins_per_room + 1)
-    freqs_all = k_all * float(fs) / float(n_fft)
+        with open(metadata_path, "r") as f:
+            meta_json = json.load(f)
 
-    # select bins
-    bins_per_room = dataset.bins_per_room
-    if bin_step is None:
-        selected_bin_indices = np.arange(0, bins_per_room)
-        print(f"processing all {bins_per_room} bins.")
+        fs = meta_json.get("fs")
+        n_fft = meta_json.get("n_fft")
+
+        k_all = np.arange(1, dataset.bins_per_room + 1)
+        freqs_all = k_all * float(fs) / float(n_fft)
+
+        # select bins
+        bins_per_room = dataset.bins_per_room
+        if bin_step is None:
+            selected_bin_indices = np.arange(0, bins_per_room)
+            print(f"processing all {bins_per_room} bins.")
+        else:
+            bin_step = int(bin_step)
+            selected_bin_indices = np.arange(0, bins_per_room, bin_step)
+            print(f"processing bins with step {bin_step}: {len(selected_bin_indices)} bins selected.")
+
+        freqs = freqs_all[selected_bin_indices]
+
+        # select rooms
+        total_rooms = dataset.num_rooms
+        if num_rooms is None:
+            selected_rooms = list(range(total_rooms))
+            print(f"using all {total_rooms} rooms for frequency analysis.")
+        else:
+            n = min(int(num_rooms), total_rooms)
+            selected_rooms = sorted(random.Random(seed).sample(range(total_rooms), n))
+            print(f"using {n} randomly selected rooms (seed={seed}).")
+
+        print(f"{len(selected_bin_indices)} bins across {len(selected_rooms)} rooms")
+
+        avg_nmse_sr, avg_nmse_bic = [], []
+        avg_ncc_sr, avg_ncc_bic = [], []
+
+        for bin_idx in tqdm(selected_bin_indices, desc="Processing bins"):
+            b_nmse_sr, b_nmse_bic = [], []
+            b_ncc_sr, b_ncc_bic = [], []
+
+            freq_hz = freqs_all[bin_idx]
+
+            for room_idx in selected_rooms:
+                idx = room_idx * dataset.bins_per_room + int(bin_idx)
+                gt_hr, lr_low, freq = dataset[idx]
+
+                with torch.no_grad():
+                    lr_cond = model.upsample_lr(lr_low.unsqueeze(0).to(device))
+                    freq_tensor = torch.tensor([freq], dtype=torch.float32, device=device)
+                    sr_out = diffusion.super_resolution({'SR': lr_cond, 'freq': freq_tensor})
+                    sr_out = sr_out.unsqueeze(0)
+
+                gt_mag = complex_to_magnitude(gt_hr.unsqueeze(0).to(device))
+                sr_mag = complex_to_magnitude(sr_out.to(device))
+
+                target_size = (gt_mag.shape[-2], gt_mag.shape[-1])
+                lr_complex = lr_low.unsqueeze(0).to(device)
+                bicubic_complex = torch.nn.functional.interpolate(lr_complex, target_size, mode='bicubic',
+                                                                  align_corners=False)
+                bicubic_out = complex_to_magnitude(bicubic_complex)
+
+                metrics_sr = get_metrics(gt_mag, sr_mag)
+                metrics_bic = get_metrics(gt_mag, bicubic_out)
+
+                b_nmse_sr.append(metrics_sr['NMSE_dB'])
+                b_ncc_sr.append(metrics_sr['NCC'])
+
+                b_nmse_bic.append(metrics_bic['NMSE_dB'])
+                b_ncc_bic.append(metrics_bic['NCC'])
+
+            avg_nmse_sr.append(float(np.mean(b_nmse_sr)))
+            avg_nmse_bic.append(float(np.mean(b_nmse_bic)))
+            avg_ncc_sr.append(float(np.mean(b_ncc_sr)))
+            avg_ncc_bic.append(float(np.mean(b_ncc_bic)))
+
+            print(
+                f"\nFreq {freq_hz:.1f}Hz Done. "
+                f"Model NMSE: {avg_nmse_sr[-1]:.2f} dB | NCC: {avg_ncc_sr[-1]:.4f} | "
+                f"Bicubic NMSE: {avg_nmse_bic[-1]:.2f} dB | Bicubic NCC: {avg_ncc_bic[-1]:.4f}"
+            )
+
+        results = {
+            'meta': {
+                'checkpoint_dir': checkpoint_dir,
+                'seed': seed,
+                'num_rooms': len(selected_rooms),
+                'room_indices': [int(r) for r in selected_rooms],
+                'bin_step': bin_step,
+            },
+            'freqs': [float(x) for x in freqs],  # changed from x_axis to freqs to match inference loop
+            'nmse_dB': {
+                'diff_m': [float(x) for x in avg_nmse_sr],
+                'bic_m': [float(x) for x in avg_nmse_bic]
+            },
+            'ncc': {
+                'diff_m': [float(x) for x in avg_ncc_sr],
+                'bic_m': [float(x) for x in avg_ncc_bic]
+            }
+        }
+        with open(json_path, "w") as jf:
+            json.dump(results, jf, indent=2)
+        print(f"Comparison results written to: {json_path}")
+
+        x_axis = freqs
+
     else:
-        bin_step = int(bin_step)
-        selected_bin_indices = np.arange(0, bins_per_room, bin_step)
-        print(f"processing bins with step {bin_step}: {len(selected_bin_indices)} bins selected.")
+        # Load from JSON instead of running inference
+        print(f"Loading results from {json_path}")
+        with open(json_path, "r") as jf:
+            results = json.load(jf)
 
-    freqs = freqs_all[selected_bin_indices]
+        x_axis = results['freqs']
+        avg_nmse_sr = results['nmse_dB']['diff_m']
+        avg_nmse_bic = results['nmse_dB']['bic_m']
+        avg_ncc_sr = results['ncc']['diff_m']
+        avg_ncc_bic = results['ncc']['bic_m']
 
-    # select rooms
-    total_rooms = dataset.num_rooms
-    if num_rooms is None:
-        selected_rooms = list(range(total_rooms))
-        print(f"using all {total_rooms} rooms for frequency analysis.")
-    else:
-        n = min(int(num_rooms), total_rooms)
-        selected_rooms = sorted(random.Random(seed).sample(range(total_rooms), n))
-        print(f"using {n} randomly selected rooms (seed={seed}).")
-
-    print(f"{len(selected_bin_indices)} bins across {len(selected_rooms)} rooms")
-
-    avg_nmse_sr, avg_nmse_bic = [], []
-    avg_ncc_sr, avg_ncc_bic = [], []
-
-    for bin_idx in tqdm(selected_bin_indices, desc="Processing Selected Bins"):
-        b_nmse_sr, b_nmse_bic = [], []
-        b_ncc_sr, b_ncc_bic = [], []
-
-        freq_hz = freqs_all[bin_idx]
-
-        for room_idx in selected_rooms:
-            idx = room_idx * dataset.bins_per_room + int(bin_idx)
-            gt_hr, lr_low, freq = dataset[idx]
-
-            with torch.no_grad():
-                lr_cond = model.upsample_lr(lr_low.unsqueeze(0).to(device))
-                freq_tensor = torch.tensor([freq], dtype=torch.float32, device=device)
-                sr_out = diffusion.super_resolution({'SR': lr_cond, 'freq': freq_tensor})
-                sr_out = sr_out.unsqueeze(0)
-
-            gt_mag = complex_to_magnitude(gt_hr.unsqueeze(0).to(device))
-            sr_mag = complex_to_magnitude(sr_out.to(device))
-
-            target_size = (gt_mag.shape[-2], gt_mag.shape[-1])
-            lr_complex = lr_low.unsqueeze(0).to(device)
-            bicubic_complex = torch.nn.functional.interpolate(lr_complex, target_size, mode='bicubic',
-                                                              align_corners=False)
-            bicubic_out = complex_to_magnitude(bicubic_complex)
-
-            metrics_sr = get_metrics(gt_mag, sr_mag)
-            metrics_bic = get_metrics(gt_mag, bicubic_out)
-
-            b_nmse_sr.append(metrics_sr['NMSE_dB'])
-            b_ncc_sr.append(metrics_sr['NCC'])
-
-            b_nmse_bic.append(metrics_bic['NMSE_dB'])
-            b_ncc_bic.append(metrics_bic['NCC'])
-
-        avg_nmse_sr.append(float(np.mean(b_nmse_sr)))
-        avg_nmse_bic.append(float(np.mean(b_nmse_bic)))
-        avg_ncc_sr.append(float(np.mean(b_ncc_sr)))
-        avg_ncc_bic.append(float(np.mean(b_ncc_bic)))
-
-        print(
-            f"\nFreq {freq_hz:.1f}Hz Done. "
-            f"Model NMSE: {avg_nmse_sr[-1]:.2f} dB | NCC: {avg_ncc_sr[-1]:.4f} | "
-            f"Bicubic NMSE: {avg_nmse_bic[-1]:.2f} dB | Bicubic NCC: {avg_ncc_bic[-1]:.4f}"
-        )
-
-    x_axis = freqs
-    fig, ax = plt.subplots(2, 1, figsize=(14, 12), sharex=True)
+    # --- PLOTTING (This runs regardless of whether inference was executed or loaded) ---
+    fig, ax = plt.subplots(1, 2, figsize=(11, 5), sharex=True)
 
     # NMSE [dB]
     ax[0].plot(x_axis, avg_nmse_sr, label='SFR3')
     ax[0].plot(x_axis, avg_nmse_bic, label='Bicubic', linestyle=':')
     ax[0].set_ylabel("NMSE [dB]")
-    ax[0].set_title("Model testing")
+    ax[0].set_xlabel("Frequency [Hz]")
+    ax[0].set_title("NMSE vs Freq")
     ax[0].legend()
     ax[0].grid(True, alpha=0.3)
     # NCC
@@ -252,37 +292,13 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
     ax[1].set_ylabel("NCC")
     ax[1].set_xlabel("Frequency [Hz]")
     ax[1].set_ylim(bottom=0, top=1.05)
+    ax[1].set_title("NCC vs Freq")
     ax[1].legend()
     ax[1].grid(True, alpha=0.3)
-    eval_dir = os.path.join(checkpoint_dir, "eval")
-    os.makedirs(eval_dir, exist_ok=True)
     plt.tight_layout()
     plt.savefig(os.path.join(eval_dir, "freq_analysis_comparison.pdf"))
     plt.show()
 
-    # Save JSON Results
-    results = {
-        'meta': {
-            'checkpoint_dir': checkpoint_dir,
-            'seed': seed,
-            'num_rooms': len(selected_rooms),
-            'room_indices': [int(r) for r in selected_rooms],
-            'bin_step': bin_step,
-        },
-        'freqs': [float(x) for x in x_axis],
-        'nmse_dB': {
-            'diff_m': [float(x) for x in avg_nmse_sr],
-            'bic_m': [float(x) for x in avg_nmse_bic]
-        },
-        'ncc': {
-            'diff_m': [float(x) for x in avg_ncc_sr],
-            'bic_m': [float(x) for x in avg_ncc_bic]
-        }
-    }
-    json_path = os.path.join(eval_dir, "freq_analysis.json")
-    with open(json_path, "w") as jf:
-        json.dump(results, jf, indent=2)
-    print(f"comparison results written to: {json_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -298,4 +314,4 @@ if __name__ == "__main__":
 
     plot_training(args.checkpoint_dir)
     evaluation(args.metadata, args.checkpoint_dir)
-    frequency_analysis(args.metadata, args.checkpoint_dir, num_rooms=1, bin_step=30)
+    frequency_analysis(args.metadata, args.checkpoint_dir, num_rooms=10, bin_step=2, run_inference=False)
