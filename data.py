@@ -317,8 +317,6 @@ class SoundFieldDataset(Dataset):
         self.f_min = self.fsampl / self.n_fft  # first bin (bin_index 0 + 1)
         max_freq_idx = int(np.ceil(float(meta['max_freq']) / float(meta['fs']) * float(meta['n_fft'])))
         self.f_max = (max_freq_idx*self.fsampl) / self.n_fft
-        self.log_f_min = math.log(self.f_min)
-        self.log_f_max = math.log(self.f_max)
 
         self.mem_hr = None
         self.mem_lr = None
@@ -351,8 +349,8 @@ class SoundFieldDataset(Dataset):
         lr_low = lr_low / slice_max
 
         freq_raw = ((bin_index + 1) * self.fsampl) / self.n_fft
-        # log min-max norm to [0, 1000] (like ddpm timestep)
-        freq_norm = 1000.0 * (math.log(freq_raw) - self.log_f_min) / (self.log_f_max - self.log_f_min)
+        # min-max norm to [0, 1000] (like ddpm timestep)
+        freq_norm = 1000.0 * (freq_raw - self.f_min) / (self.f_max - self.f_min)
         return gt_hr, lr_low, freq_norm
 
 
