@@ -8,19 +8,20 @@ import random
 import torch
 import json
 import math
+import csv
 import os
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lowres', type=int, default=4)
-    parser.add_argument('--highres', type=int, default=32)
-    parser.add_argument('--maxfreq', type=int, default=500)
+    parser.add_argument('--lowres', type=int, default=8)
+    parser.add_argument('--highres', type=int, default=64)
+    parser.add_argument('--maxfreq', type=int, default=1000)
     parser.add_argument('--len_rir', type=int, default=2048)
     parser.add_argument('--n_fft', type=int, default=2048)
     parser.add_argument('--fsampl', type=int, default=16000)
-    parser.add_argument('--out_dir', type=str, default='dataset_4to32_500')
-    parser.add_argument('--generate', type=int, choices=[0,1], default=0)
+    parser.add_argument('--out_dir', type=str, default='dataset_8to64_1000_10krooms')
+    parser.add_argument('--generate', type=int, choices=[0,1], default=1)
     parser.add_argument('--show', type=int, choices=[0,1], default=1)
     parser.add_argument('--seed', type=int, default=None)
 
@@ -221,9 +222,12 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
     os.makedirs(out_rooms_dir, exist_ok=True)
 
     per_room_paths = []
-    metadata_list = []
-    assert num_rooms > 0
     bins = ch = hr_h = hr_w = lr_h = lr_w = 0
+
+    csv_path = os.path.join(output_dir, "rooms.csv")
+    csv_file = open(csv_path, 'w', newline='')
+    csv_writer = csv.DictWriter(csv_file, fieldnames=["room_index", "room_dim", "mic_region", "t60", "source_position"])
+    csv_writer.writeheader()
 
     for i in tqdm(range(num_rooms), desc=f"Generating {os.path.basename(output_dir)}"):
         hr_tensor, lr_tensor, room_dim, mic_region, rt60, source_position = generate_sound_field(
@@ -247,15 +251,18 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
         torch.save(room_dict, room_path)
         per_room_paths.append(room_path)
 
-        metadata_list.append({
+        csv_writer.writerow({
             "room_index": i,
             "room_dim": list(room_dim),
             "mic_region": [list(mic_region[0]), list(mic_region[1]), list(mic_region[2])],
             "t60": float(rt60),
             "source_position": [float(x) for x in source_position],
         })
+        csv_file.flush()
 
         del hr_tensor, lr_tensor, hr_tensor_no0, lr_tensor_no0, room_dict
+
+    csv_file.close()
 
     combined_hr_path = os.path.join(output_dir, f"{basename}_hr.npy")
     combined_lr_path = os.path.join(output_dir, f"{basename}_lr.npy")
@@ -288,8 +295,6 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
         # relative npy paths
         "npy_hr": os.path.relpath(combined_hr_path, output_dir),
         "npy_lr": os.path.relpath(combined_lr_path, output_dir),
-        # per-room reproduction data
-        "rooms": metadata_list,
     }
     with open(os.path.join(output_dir, "metadata.json"), "w") as js:
         json.dump(meta, js, indent=2)
@@ -358,9 +363,9 @@ class SoundFieldDataset(Dataset):
 if __name__ == '__main__':
 
     dataset_sizes = {
-        'train': 9000,
+        'test': 500,
         'val': 500,
-        'test': 500
+        'train': 9000,
     }
 
     seed = args.seed if args.seed is not None else random.randint(0, 1000)
