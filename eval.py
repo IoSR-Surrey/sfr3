@@ -9,6 +9,7 @@ import argparse
 import random
 import torch
 import json
+import csv
 import os
 
 
@@ -37,13 +38,16 @@ def complex_to_magnitude(x):
 
 
 def plot_training(checkpoints, show_lr=True):
-    with open(rf'{checkpoints}\logs\training_history.json', 'r') as file:
-        data = json.load(file)
 
-    epochs = [entry['epoch'] for entry in data['epochs']]
-    train_losses = [entry['train_loss'] for entry in data['epochs']]
-    val_losses = [entry['val_loss'] for entry in data['epochs']]
-    lrs = [entry['lr'] for entry in data['epochs']]
+    csv_path = os.path.join(checkpoints, 'training_history.csv')
+    epochs, train_losses, val_losses, lrs = [], [], [], []
+    with open(csv_path, 'r') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            epochs.append(int(row['epoch']))
+            train_losses.append(float(row['train_loss']))
+            val_losses.append(float(row['val_loss']))
+            lrs.append(float(row['lr']))
 
     nrows = 2 if show_lr else 1
     fig, axes = plt.subplots(nrows, 1, figsize=(12, 5 * nrows), sharex=True, squeeze=False)
