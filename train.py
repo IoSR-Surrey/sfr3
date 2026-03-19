@@ -1,3 +1,10 @@
+import warnings
+warnings.simplefilter("ignore")
+original_filterwarnings = warnings.filterwarnings
+def _filterwarnings(*args, **kwargs):
+    return original_filterwarnings(*args, **{**kwargs, 'append': True})
+warnings.filterwarnings = _filterwarnings
+
 from pl_bolts.optimizers import LinearWarmupCosineAnnealingLR
 from pytorch_lightning.callbacks import ModelCheckpoint
 from sr3_modules.diffusion import GaussianDiffusion
