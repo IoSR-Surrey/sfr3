@@ -1,7 +1,6 @@
-from sr3_modules.diffusion import GaussianDiffusion
+from train import SR3DiffusionModule
 from data import SoundFieldDataset
 import matplotlib.pyplot as plt
-from model import SR3UNet
 import torch.nn.functional
 from tqdm import tqdm
 import numpy as np
@@ -93,17 +92,10 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     print(f"Random room: {room_idx}, Data Index: {bin_idx}")
     print(f"Physical Freq: {freq_hz:.2f} Hz (Bin {bin_idx + 1})")
 
-    model = SR3UNet(grid_res=dataset.hr_res).to(device)
-    diffusion = GaussianDiffusion(denoise_fn=model, image_size=dataset.hr_res, channels=2).to(device)
-    diffusion.set_new_noise_schedule(
-        {'schedule': 'cosine', 'n_timestep': 1000, 'linear_start': 1e-4, 'linear_end': 2e-2}, device)
-
-    ckpt_path = os.path.join(checkpoint_dir, "latest_model.pth")
-    if os.path.exists(ckpt_path):
-        ckpt = torch.load(ckpt_path, map_location=device)
-        model.load_state_dict(ckpt['model_state_dict'])
-        diffusion.load_state_dict(ckpt['diffusion_state_dict'])
-    model.eval()
+    ckpt_path = os.path.join(checkpoint_dir, "last.ckpt")
+    lit = SR3DiffusionModule.load_from_checkpoint(ckpt_path, map_location=device)
+    model = lit.diffusion.denoise_fn.to(device)
+    diffusion = lit.diffusion.to(device)
     diffusion.eval()
 
     gt_hr, lr_low, freq = dataset[sample_index]
@@ -161,19 +153,10 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         dataset = SoundFieldDataset(path=metadata_path)
-        model = SR3UNet(grid_res=dataset.hr_res).to(device)
-        diffusion = GaussianDiffusion(denoise_fn=model, image_size=dataset.hr_res, channels=2).to(device)
-        diffusion.set_new_noise_schedule(
-            {'schedule': 'cosine', 'n_timestep': 1000, 'linear_start': 1e-4, 'linear_end': 2e-2}, device)
-
-        ckpt_path = os.path.join(checkpoint_dir, "latest_model.pth")
-        if os.path.exists(ckpt_path):
-            ckpt = torch.load(ckpt_path, map_location=device)
-            if 'model_state_dict' in ckpt:
-                model.load_state_dict(ckpt['model_state_dict'])
-            if 'diffusion_state_dict' in ckpt:
-                diffusion.load_state_dict(ckpt['diffusion_state_dict'])
-        model.eval()
+        ckpt_path = os.path.join(checkpoint_dir, "last.ckpt")
+        lit = SR3DiffusionModule.load_from_checkpoint(ckpt_path, map_location=device)
+        model = lit.diffusion.denoise_fn.to(device)
+        diffusion = lit.diffusion.to(device)
         diffusion.eval()
 
         with open(metadata_path, "r") as f:
