@@ -1,15 +1,18 @@
 name: sr3sfr
 channels:
+  - conda-forge
   - defaults
 dependencies:
   - python=3.12.12
-  - pip=26.0.1
+  - pip
   - pip:
-      - --index-url https://download.pytorch.org/whl/cu130
-      - torch==2.10.0
-      - matplotlib==3.10.8
-      - numpy==2.3.5
-      - pyroomacoustics==0.9.0
-      - tqdm==4.67.3
+      - --index-url https://pypi.org/simple
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - torch==2.2.2
+      - torchvision==0.17.2
       - pytorch-lightning==1.9.5
       - lightning-bolts==0.7.0
+      - matplotlib==3.10.8
+      - numpy==1.26.4
+      - pyroomacoustics==0.9.0
+      - tqdm==4.67.3
