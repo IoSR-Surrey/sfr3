@@ -84,12 +84,7 @@ def generate_sound_field(room_dim, mic_region, z_slice=None, grid_res=64, lr_res
             e_absorption, _ = pra.inverse_sabine(rt60, current_dim)
 
             # dense HR room (for dense mic grid)
-            room = pra.ShoeBox(
-                current_dim,
-                fs=fsampl,
-                max_order=30,
-                materials=pra.Material(e_absorption)
-            )
+            room = pra.ShoeBox(current_dim, fs=fsampl, max_order=30, materials=pra.Material(e_absorption))
             room_dim = current_dim
             break
 
@@ -104,10 +99,7 @@ def generate_sound_field(room_dim, mic_region, z_slice=None, grid_res=64, lr_res
         # at least 0.5m from walls/ceiling
         mx0 = round(random.uniform(0.5, room_dim[0] - 1.5), 2)
         my0 = round(random.uniform(0.5, room_dim[1] - 1.5), 2)
-        mic_region = (
-            (mx0, round(mx0 + 1.0, 2)),
-            (my0, round(my0 + 1.0, 2))
-        )
+        mic_region = ((mx0, round(mx0 + 1.0, 2)), (my0, round(my0 + 1.0, 2)))
         (mx0, mx1), (my0, my1) = mic_region
     else:
         (mx0, mx1), (my0, my1) = mic_region
@@ -168,12 +160,7 @@ def generate_sound_field(room_dim, mic_region, z_slice=None, grid_res=64, lr_res
         pressure_hr[:, row, col] = hfreq
 
     # re-create the same room with a coarse mic grid inside the same mic_region
-    room_lr = pra.ShoeBox(
-        room_dim,
-        fs=fsampl,
-        max_order=30,
-        materials=pra.Material(e_absorption)
-    )
+    room_lr = pra.ShoeBox(room_dim, fs=fsampl, max_order=30, materials=pra.Material(e_absorption))
     room_lr.add_source(source_position.tolist())
 
     x_lr = np.linspace(mx0, mx1, lr_res)
@@ -223,8 +210,9 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
 
     csv_path = os.path.join(output_dir, "rooms.csv")
     csv_file = open(csv_path, 'w', newline='')
-    csv_writer = csv.DictWriter(csv_file, fieldnames=["room_index", "room_dim", "mic_region", "z_slice", "t60", "source_position"])
-    csv_writer.writeheader()
+    csv_wrt = csv.DictWriter(csv_file,
+                             fieldnames=["room_index", "room_dim", "mic_region", "z_slice", "t60", "source_position"])
+    csv_wrt.writeheader()
 
     for i in tqdm(range(num_rooms), desc=f"Generating {os.path.basename(output_dir)}"):
         hr_tensor, lr_tensor, room_dim, mic_region, z_slice, rt60, source_position = generate_sound_field(
@@ -248,7 +236,7 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
         torch.save(room_dict, room_path)
         per_room_paths.append(room_path)
 
-        csv_writer.writerow({
+        csv_wrt.writerow({
             "room_index": i,
             "room_dim": list(room_dim),
             "mic_region": [list(mic_region[0]), list(mic_region[1])],
@@ -276,6 +264,8 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
         mem_lr[i] = d["lr"].numpy()[:bins]
         del d
 
+    mem_hr.flush()
+    mem_lr.flush()
     del mem_hr, mem_lr
 
     meta = {
@@ -380,9 +370,8 @@ if __name__ == '__main__':
 
         if generate:
             print(f"Starting generation: dataset_type={dataset_type}, num_rooms={num_rooms}, out_dir={target_dir}")
-            metadata = generate_and_save_dataset(num_rooms=int(num_rooms),
-                                                       output_dir=target_dir,
-                                                       basename=f"sound_field_{dataset_type}")
+            metadata = generate_and_save_dataset(num_rooms=int(num_rooms), output_dir=target_dir,
+                                                 basename=f"sound_field_{dataset_type}")
             metadata_store[dataset_type] = metadata
 
 
