@@ -40,7 +40,7 @@ generate = args.generate
 show = args.show
 out_dir = args.out_dir
 
-def generate_sound_field(room_dim, mic_region, grid_res=64, lr_res=16, max_freq=1500):
+def generate_sound_field(room_dim, mic_region, z_slice=None, grid_res=64, lr_res=16, max_freq=1500):
     """
     Generate an HR dense grid and an LR grid.
     Returns:
@@ -100,21 +100,19 @@ def generate_sound_field(room_dim, mic_region, grid_res=64, lr_res=16, max_freq=
                 room_dim = None
             continue
 
-    # mic region definition
     if mic_region is None:
-        # 1m x 1m x 1m exclusion volume (at least 0.5m from walls/ceiling)
+        # at least 0.5m from walls/ceiling
         mx0 = round(random.uniform(0.5, room_dim[0] - 1.5), 2)
         my0 = round(random.uniform(0.5, room_dim[1] - 1.5), 2)
-        mz0 = round(random.uniform(0.5, room_dim[2] - 1.5), 2)
-
-        # exclusion box for the source
         mic_region = (
             (mx0, round(mx0 + 1.0, 2)),
-            (my0, round(my0 + 1.0, 2)),
-            (mz0, round(mz0 + 1.0, 2))
+            (my0, round(my0 + 1.0, 2))
         )
-
-    (mx0, mx1), (my0, my1), (mz0, mz1) = mic_region
+        (mx0, mx1), (my0, my1) = mic_region
+    else:
+        (mx0, mx1), (my0, my1) = mic_region
+    if z_slice is None:
+        z_slice = round(random.uniform(0.5, room_dim[2] - 0.5), 2)
 
     # source placement
     while True:
@@ -123,16 +121,15 @@ def generate_sound_field(room_dim, mic_region, grid_res=64, lr_res=16, max_freq=
             random.uniform(0.5, room_dim[1] - 0.5),
             random.uniform(0.5, room_dim[2] - 0.5)
         ])
-        # check if source is inside exclusion box
-        in_x = mx0 <= source_position[0] <= mx1
-        in_y = my0 <= source_position[1] <= my1
-        in_z = mz0 <= source_position[2] <= mz1
+        # check if source is inside exclusion box (0.25m padding in all coords)
+        in_x = (mx0 - 0.25) <= source_position[0] <= (mx1 + 0.25)
+        in_y = (my0 - 0.25) <= source_position[1] <= (my1 + 0.25)
+        in_z = (z_slice - 0.25) <= source_position[2] <= (z_slice + 0.25)
         if not (in_x and in_y and in_z):
             break
     room.add_source(source_position.tolist())
 
     # dense microphone grid inside mic_region
-    z_slice = (mz0 + mz1) / 2.0
     x_hr = np.linspace(mx0, mx1, grid_res)
     y_hr = np.linspace(my0, my1, grid_res)
     x_mesh_hr, y_mesh_hr = np.meshgrid(x_hr, y_hr)
@@ -209,7 +206,7 @@ def generate_sound_field(room_dim, mic_region, grid_res=64, lr_res=16, max_freq=
     lr_imag = torch.tensor(pressure_lr.imag, dtype=torch.float32)
     lr_tensor = torch.stack([lr_real, lr_imag], dim=1)  # [bins, 2, H_lr, W_lr]
 
-    return hr_tensor, lr_tensor, room_dim, mic_region, rt60, source_position
+    return hr_tensor, lr_tensor, room_dim, mic_region, z_slice, rt60, source_position
 
 
 def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_field_dataset', rooms_sub='dataset_rooms'):
@@ -226,11 +223,11 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
 
     csv_path = os.path.join(output_dir, "rooms.csv")
     csv_file = open(csv_path, 'w', newline='')
-    csv_writer = csv.DictWriter(csv_file, fieldnames=["room_index", "room_dim", "mic_region", "t60", "source_position"])
+    csv_writer = csv.DictWriter(csv_file, fieldnames=["room_index", "room_dim", "mic_region", "z_slice", "t60", "source_position"])
     csv_writer.writeheader()
 
     for i in tqdm(range(num_rooms), desc=f"Generating {os.path.basename(output_dir)}"):
-        hr_tensor, lr_tensor, room_dim, mic_region, rt60, source_position = generate_sound_field(
+        hr_tensor, lr_tensor, room_dim, mic_region, z_slice, rt60, source_position = generate_sound_field(
             None, None, grid_res=highres, lr_res=lowres, max_freq=maxfreq
         )
 
@@ -254,7 +251,8 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
         csv_writer.writerow({
             "room_index": i,
             "room_dim": list(room_dim),
-            "mic_region": [list(mic_region[0]), list(mic_region[1]), list(mic_region[2])],
+            "mic_region": [list(mic_region[0]), list(mic_region[1])],
+            "z_slice": float(z_slice),
             "t60": float(rt60),
             "source_position": [float(x) for x in source_position],
         })
