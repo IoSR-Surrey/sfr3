@@ -115,9 +115,11 @@ class CSVHistoryLogger(pl.Callback):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--suffix', dest='suffix', type=str, default="4to32_500_(2000rooms)")
+    parser.add_argument('--suffix', dest='suffix', type=str, default="4to32_500_10krooms")
     parser.add_argument('--resume', action='store_true', default=True)
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--devices', type=int, default=1)
+    parser.add_argument('--nodes', type=int, default=1)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--lr', type=float, default=2e-4)
     parser.add_argument('--max_epochs', type=int, default=1000)
@@ -135,7 +137,8 @@ if __name__ == "__main__":
     val_metadata = f"dataset_{s}/val/metadata.json" if s else "dataset/val/metadata.json"
 
     datamodule = SoundFieldDataModule(train_metadata_path=train_metadata, val_metadata_path=val_metadata,
-                                      batch_size=args.batch_size, num_workers=args.num_workers)
+                                      batch_size=args.batch_size // (args.nodes * args.devices),
+                                      num_workers=args.num_workers)
     datamodule.setup()
 
     model = SR3DiffusionModule(hr_res=datamodule.hr_res, lr=args.lr, max_epochs=args.max_epochs,
@@ -150,8 +153,8 @@ if __name__ == "__main__":
     # writes metrics.csv (epoch, train_loss, val_loss, lr)
     csv_logger = CSVHistoryLogger(save_dir=out_dir)
 
-    trainer = pl.Trainer(max_epochs=args.max_epochs, accelerator="auto", devices=1, precision="16",
-                         gradient_clip_val=1.0, gradient_clip_algorithm="norm",
+    trainer = pl.Trainer(num_nodes=args.nodes, max_epochs=args.max_epochs, accelerator="auto", devices=args.devices,
+                         precision="16", gradient_clip_val=1.0, gradient_clip_algorithm="norm",
                          callbacks=[checkpoint_best, checkpoint_periodic, csv_logger], logger=False)
 
     resume_path = os.path.join(out_dir, "last.ckpt") if args.resume else None
