@@ -7,6 +7,7 @@ warnings.filterwarnings = _filterwarnings
 
 from pl_bolts.optimizers import LinearWarmupCosineAnnealingLR
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.utilities import rank_zero_only
 from sr3_modules.diffusion import GaussianDiffusion
 from torch.utils.data import DataLoader
 from data import SoundFieldDataset
@@ -26,9 +27,11 @@ class SR3DiffusionModule(pl.LightningModule):
 
         model = SR3UNet(grid_res=hr_res)
         self.diffusion = GaussianDiffusion(denoise_fn=model, image_size=hr_res, channels=2)
+
+    def setup(self, stage=None):
         self.diffusion.set_new_noise_schedule({'schedule': 'cosine', 'n_timestep': 1000,
-                                               'linear_start': 1e-4, 'linear_end': 2e-2}, device=torch.device('cpu'))
-        self.diffusion.set_loss(device=torch.device('cpu'))
+            'linear_start': 1e-4,'linear_end': 2e-2}, device=self.device)
+        self.diffusion.set_loss(device=self.device)
 
     def training_step(self, batch, batch_idx):
         gt_hr, lr_low, freq = batch
@@ -42,7 +45,7 @@ class SR3DiffusionModule(pl.LightningModule):
         gt_hr, lr_low, freq = batch
         lr_cond = self.diffusion.denoise_fn.upsample_lr(lr_low)
         loss = self.diffusion({'HR': gt_hr, 'SR': lr_cond, 'freq': freq.float()})
-        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.diffusion.denoise_fn.parameters(), lr=self.hparams.lr, weight_decay=1e-4)
@@ -86,6 +89,7 @@ class CSVHistoryLogger(pl.Callback):
         self.path = os.path.join(save_dir, "training_history.csv")
         self._header_written = False
 
+    @rank_zero_only
     def on_fit_start(self, trainer, pl_module):
         if trainer.ckpt_path is None:
             if os.path.exists(self.path):
@@ -94,6 +98,7 @@ class CSVHistoryLogger(pl.Callback):
         else:
             self._header_written = os.path.exists(self.path)
 
+    @rank_zero_only
     def on_train_epoch_end(self, trainer, pl_module):
         if trainer.sanity_checking:
             return
