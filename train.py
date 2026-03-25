@@ -59,6 +59,13 @@ class SR3DiffusionModule(pl.LightningModule):
             "lr_scheduler": {"scheduler": scheduler, "interval": "epoch"}
         }
 
+    def on_load_checkpoint(self, checkpoint):
+        self.diffusion.set_new_noise_schedule(
+            {'schedule': 'cosine', 'n_timestep': 1000, 'linear_start': 1e-4, 'linear_end': 2e-2},
+            device=self.device if self.device.type != 'meta' else torch.device('cpu')
+        )
+        self.diffusion.set_loss(device=self.device if self.device.type != 'meta' else torch.device('cpu'))
+
 
 class SoundFieldDataModule(pl.LightningDataModule):
     def __init__(self, train_metadata_path, val_metadata_path, batch_size, num_workers):
