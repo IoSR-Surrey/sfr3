@@ -1,6 +1,7 @@
 from train import SR3DiffusionModule
 from data import SoundFieldDataset
 import matplotlib.pyplot as plt
+from kernel import UenoKernel
 import torch.nn.functional
 from tqdm import tqdm
 import numpy as np
@@ -100,6 +101,11 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
 
     gt_hr, lr_low, freq = dataset[sample_index]
 
+    kernel = UenoKernel(lr_res=dataset.lr_res, hr_res=dataset.hr_res)
+    lr_batch = lr_low.unsqueeze(0).to(kernel.device)
+    kernel_recon = kernel.reconstruct(lr_batch, freq_hz=freq_hz).squeeze(0).cpu()
+    kernel_mag = complex_to_magnitude(kernel_recon.unsqueeze(0).to(device))
+
     with torch.no_grad():
         lr_cond = model.upsample_lr(lr_low.unsqueeze(0).to(device))
         freq_tensor = torch.tensor([freq], dtype=torch.float32, device=device)
@@ -117,19 +123,23 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
 
     m = get_metrics(gt_mag, sr_mag)
     m_bic = get_metrics(gt_mag, bicubic_out)
+    m_ker = get_metrics(gt_mag, kernel_mag)
     print(f"NMSE: {m['NMSE_dB']:.2f} dB | NCC: {m['NCC']:.2f}")
     print(f"Bicubic NMSE: {m_bic['NMSE_dB']:.2f} dB | Bicubic NCC: {m_bic['NCC']:.2f}")
+    print(f"Kernel NMSE: {m_ker['NMSE_dB']:.2f} dB | Kernel NCC: {m_ker['NCC']:.2f}")
 
-    fig, axes = plt.subplots(1, 4, figsize=(25, 5))
+    fig, axes = plt.subplots(1, 5, figsize=(25, 5))
 
     axes[0].imshow(lr_mag[0, 0].cpu().numpy(), origin='lower')
     axes[0].set_title("Input (LR)")
     axes[1].imshow(bicubic_out[0, 0].cpu().numpy(), origin='lower')
     axes[1].set_title("Bicubic Interpolation")
-    axes[2].imshow(sr_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[2].set_title("Generated (Diffusion)")
-    axes[3].imshow(gt_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[3].set_title("Ground Truth")
+    axes[2].imshow(kernel_mag[0, 0].cpu().numpy(), origin='lower')
+    axes[2].set_title("Ueno Kernel")
+    axes[3].imshow(sr_mag[0, 0].cpu().numpy(), origin='lower')
+    axes[3].set_title("Generated (Diffusion)")
+    axes[4].imshow(gt_mag[0, 0].cpu().numpy(), origin='lower')
+    axes[4].set_title("Ground Truth")
     eval_dir = os.path.join(checkpoint_dir, "eval")
     os.makedirs(eval_dir, exist_ok=True)
     plt.suptitle(f"Room {room_idx} - Freq {freq_hz:.1f}Hz")
@@ -194,10 +204,12 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
 
         avg_nmse_sr, avg_nmse_bic = [], []
         avg_ncc_sr, avg_ncc_bic = [], []
+        avg_nmse_ker, avg_ncc_ker = [], []
 
         for bin_idx in tqdm(selected_bin_indices, desc="Processing bins"):
             b_nmse_sr, b_nmse_bic = [], []
             b_ncc_sr, b_ncc_bic = [], []
+            b_nmse_ker, b_ncc_ker = [], []
 
             freq_hz = freqs_all[bin_idx]
 
@@ -220,8 +232,14 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
                                                                   align_corners=False)
                 bicubic_out = complex_to_magnitude(bicubic_complex)
 
+                kernel = UenoKernel(lr_res=dataset.lr_res, hr_res=dataset.hr_res)
+                lr_batch = lr_low.unsqueeze(0).to(kernel.device)
+                kernel_recon = kernel.reconstruct(lr_batch, freq_hz=float(freq_hz))
+                kernel_mag = complex_to_magnitude(kernel_recon.to(device))
+
                 metrics_sr = get_metrics(gt_mag, sr_mag)
                 metrics_bic = get_metrics(gt_mag, bicubic_out)
+                metrics_ker = get_metrics(gt_mag, kernel_mag)
 
                 b_nmse_sr.append(metrics_sr['NMSE_dB'])
                 b_ncc_sr.append(metrics_sr['NCC'])
@@ -229,15 +247,21 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
                 b_nmse_bic.append(metrics_bic['NMSE_dB'])
                 b_ncc_bic.append(metrics_bic['NCC'])
 
+                b_nmse_ker.append(metrics_ker['NMSE_dB'])
+                b_ncc_ker.append(metrics_ker['NCC'])
+
             avg_nmse_sr.append(float(np.mean(b_nmse_sr)))
             avg_nmse_bic.append(float(np.mean(b_nmse_bic)))
             avg_ncc_sr.append(float(np.mean(b_ncc_sr)))
             avg_ncc_bic.append(float(np.mean(b_ncc_bic)))
+            avg_nmse_ker.append(float(np.mean(b_nmse_ker)))
+            avg_ncc_ker.append(float(np.mean(b_ncc_ker)))
 
             print(
                 f"\nFreq {freq_hz:.1f}Hz Done. "
                 f"Model NMSE: {avg_nmse_sr[-1]:.2f} dB | NCC: {avg_ncc_sr[-1]:.4f} | "
-                f"Bicubic NMSE: {avg_nmse_bic[-1]:.2f} dB | Bicubic NCC: {avg_ncc_bic[-1]:.4f}"
+                f"Bicubic NMSE: {avg_nmse_bic[-1]:.2f} dB | Bicubic NCC: {avg_ncc_bic[-1]:.4f} | "
+                f"Kernel NMSE: {avg_nmse_ker[-1]:.2f} dB | Kernel NCC: {avg_ncc_ker[-1]:.4f}"
             )
 
         results = {
@@ -251,11 +275,13 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
             'freqs': [float(x) for x in freqs],  # changed from x_axis to freqs to match inference loop
             'nmse_dB': {
                 'diff_m': [float(x) for x in avg_nmse_sr],
-                'bic_m': [float(x) for x in avg_nmse_bic]
+                'bic_m': [float(x) for x in avg_nmse_bic],
+                'ker_m': [float(x) for x in avg_nmse_ker]
             },
             'ncc': {
                 'diff_m': [float(x) for x in avg_ncc_sr],
-                'bic_m': [float(x) for x in avg_ncc_bic]
+                'bic_m': [float(x) for x in avg_ncc_bic],
+                'ker_m': [float(x) for x in avg_ncc_ker]
             }
         }
         with open(json_path, "w") as jf:
@@ -265,7 +291,7 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         x_axis = freqs
 
     else:
-        # Load from JSON instead of running inference
+        # load from JSON instead of running inference
         print(f"Loading results from {json_path}")
         with open(json_path, "r") as jf:
             results = json.load(jf)
@@ -275,13 +301,15 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         avg_nmse_bic = results['nmse_dB']['bic_m']
         avg_ncc_sr = results['ncc']['diff_m']
         avg_ncc_bic = results['ncc']['bic_m']
+        avg_nmse_ker = results['nmse_dB']['ker_m']
+        avg_ncc_ker = results['ncc']['ker_m']
 
-    # --- PLOTTING (This runs regardless of whether inference was executed or loaded) ---
     fig, ax = plt.subplots(1, 2, figsize=(11, 5), sharex=True)
 
     # NMSE [dB]
     ax[0].plot(x_axis, avg_nmse_sr, label='SFR3')
     ax[0].plot(x_axis, avg_nmse_bic, label='Bicubic', linestyle=':')
+    ax[0].plot(x_axis, avg_nmse_ker, label='Kernel', linestyle='--')
     ax[0].set_ylabel("NMSE [dB]")
     ax[0].set_xlabel("Frequency [Hz]")
     ax[0].set_title("NMSE vs Freq")
@@ -290,6 +318,7 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
     # NCC
     ax[1].plot(x_axis, avg_ncc_sr, label='SFR3')
     ax[1].plot(x_axis, avg_ncc_bic, label='Bicubic', linestyle=':')
+    ax[1].plot(x_axis, avg_ncc_ker, label='Kernel', linestyle='--')
     ax[1].set_ylabel("NCC")
     ax[1].set_xlabel("Frequency [Hz]")
     ax[1].set_ylim(bottom=0, top=1.05)
