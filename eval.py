@@ -36,7 +36,6 @@ def complex_to_magnitude(x):
         return torch.sqrt(real ** 2 + imag ** 2)
     return None
 
-
 def plot_training(checkpoints, show_lr=True):
 
     csv_path = os.path.join(checkpoints, 'training_history.csv')
@@ -169,6 +168,8 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         diffusion = lit.diffusion.to(device)
         diffusion.eval()
 
+        kernel = UenoKernel(lr_res=dataset.lr_res, hr_res=dataset.hr_res)
+
         with open(metadata_path, "r") as f:
             meta_json = json.load(f)
 
@@ -232,7 +233,6 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
                                                                   align_corners=False)
                 bicubic_out = complex_to_magnitude(bicubic_complex)
 
-                kernel = UenoKernel(lr_res=dataset.lr_res, hr_res=dataset.hr_res)
                 lr_batch = lr_low.unsqueeze(0).to(kernel.device)
                 kernel_recon = kernel.reconstruct(lr_batch, freq_hz=float(freq_hz))
                 kernel_mag = complex_to_magnitude(kernel_recon.to(device))
@@ -332,8 +332,8 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--metadata", type=str, default="dataset_4to32_500_(2000rooms)/test/metadata.json")
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints_4to32_500_(2000rooms)")
+    parser.add_argument("--metadata", type=str, default="dataset_4to32_500_10krooms/test/metadata.json")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints_4to32_500_10krooms")
     parser.add_argument("--seed", type=int, default=67)
     args = parser.parse_args()
 
@@ -344,4 +344,4 @@ if __name__ == "__main__":
 
     plot_training(args.checkpoint_dir, show_lr=True)
     evaluation(args.metadata, args.checkpoint_dir)
-    frequency_analysis(args.metadata, args.checkpoint_dir, num_rooms=10, bin_step=2, run_inference=False)
+    frequency_analysis(args.metadata, args.checkpoint_dir, num_rooms=50, bin_step=1, run_inference=False)
