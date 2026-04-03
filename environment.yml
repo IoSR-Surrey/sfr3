@@ -15,4 +15,6 @@ dependencies:
       - matplotlib==3.10.8
       - numpy==1.26.4
       - pyroomacoustics==0.9.0
+      - complexPyTorch==0.4
+      - scikit-learn==1.8.0
       - tqdm==4.67.3
