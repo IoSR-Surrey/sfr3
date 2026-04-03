@@ -1,5 +1,6 @@
 from torch.utils.data import Dataset
 import os
+import sys
 import numpy as np
 import torchaudio
 import random
@@ -11,6 +12,10 @@ import copy
 
 import utils
 
+root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, root)
+from data import SoundFieldDataset as SFR3dataset
+
 def norm_sf_complex(input_ten):
     gt_real_norm = (input_ten.real - input_ten.real.mean()) / input_ten.real.std()
     gt_imag_norm = (input_ten.imag - input_ten.imag.mean()) / input_ten.imag.std()
@@ -18,19 +23,12 @@ def norm_sf_complex(input_ten):
     return norm_ten
 
 
-def generate_mask(height, width, channels, num_mics=10):
-    
-    mask_slice = np.zeros((height*width), np.uint8) ### ???? if everything is cast to complex or everything is set to 0, need to multiply or not
-
-    num_holes = height*width - num_mics
-
-    index_holes = np.random.choice(int(height*width), size=num_holes, replace=False)
-
-    mask_slice[index_holes] = 1
-
-    mask_slice.resize(height, width, 1)
-        
-    mask_slice = 1-mask_slice
+def generate_mask(hr_res, lr_res, channels):
+    mask_slice = np.zeros((hr_res, hr_res, 1))
+    scale = (hr_res - 1) / (lr_res - 1)
+    for r in range(lr_res):
+        for c in range(lr_res):
+            mask_slice[round(r * scale), round(c * scale), 0] = 1
 
     mask = np.repeat(mask_slice, channels, axis=2)
 
@@ -39,103 +37,33 @@ def generate_mask(height, width, channels, num_mics=10):
 class SoundFieldDataset(Dataset):
     def __init__(
         self,
-        dataset_folder=None,
-        set_file_list=None,
-        xSample=32, 
-        ySample=32, 
-        factor=4,
-        return_dims = False,
-        do_normalize = True,
-        num_mics = 10,
-        num_mics_list = [5, 15, 35, 55],
-        do_test = False,
-        do_plot = False
-        
-        
+        metadata_path,
+        do_normalize=True,
     ):
-        
-        self.dataset_folder = dataset_folder
-        self.freq = utils.get_frequencies()
-        self.num_freq = len(self.freq)
-        self.return_dims = return_dims
+        self.ds = SFR3dataset(path=metadata_path)
+        self.hr_res = self.ds.hr_res
+        self.lr_res = self.ds.lr_res
         self.do_normalize = do_normalize
-        self.do_test = do_test
-        self.num_mics = num_mics
-        self.do_plot = do_plot
-        self.num_mics_list = num_mics_list
-        
-        if dataset_folder is None and set_file_list is None:
-            print(f"Only one of those can be sett to None")
-            #TODO: Throw error
-            return
-            
-        if dataset_folder is None:
-            self.soundfield_list = set_file_list
-        else:
-            self.soundfield_list = glob.glob(os.path.join(self.dataset_folder, "*.mat"))
-        
-        self.xSample = int(xSample)
-        self.ySamples = int(ySample)
-        self.factor = int(factor) 
-        
-        
+        self.ds._init_memmaps()
+        self.mask = generate_mask(self.hr_res, self.lr_res, self.ds.bins_per_room)
+
     def __len__(self):
-        return len(self.soundfield_list)
+        return self.ds.num_rooms
 
     def __getitem__(self, item):
-        sf_item = self.soundfield_list[item]
+        gt_list = []
+        lr_up_list = []
 
-        frequencies = np.asarray(self.freq)
-        mat = scipy.io.loadmat(sf_item)
-        
-        f_response_complex = mat['FrequencyResponse'].astype(np.complex64)
+        for bin_idx in range(self.ds.bins_per_room):
+            gt_hr, lr_low, _ = self.ds[item * self.ds.bins_per_room + bin_idx]
+            hr_c = gt_hr[0].numpy() + 1j * gt_hr[1].numpy()
+            lr_c = lr_low[0].numpy() + 1j * lr_low[1].numpy()
+            lr_up_list.append(utils.upsampling(lr_c, self.lr_res, self.hr_res))
+            gt_list.append(hr_c)
 
-        f_response_complex = np.transpose(f_response_complex, (1, 0, 2))
+        irregular_sf = torch.from_numpy(np.stack(lr_up_list, axis=0).astype(np.complex64))
+        sf_gt = torch.from_numpy(np.stack(gt_list, axis=0).astype(np.complex64))
+        mask = torch.from_numpy(self.mask).permute(2, 0, 1).to(torch.complex64)
+        sf_masked = torch.cat((irregular_sf, mask), dim=0)
 
-        sf_gt= f_response_complex[:, :, frequencies] # considering only 40 frequencies [32, 32, 40]
-
-        initial_sf = copy.deepcopy(sf_gt)
-        
-
-        # Get mask samples (always the same mask so far)
-        if self.do_test:
-            if self.num_mics is None:
-                print('Error: No number of microphones provided, we are in test mode!')
-                return
-            mask = generate_mask(int(self.xSample / self.factor), int(self.ySamples / self.factor), self.num_freq, self.num_mics)
-        else:
-            #num_mics = random.choice(self.num_mics_list)
-            mask = generate_mask(int(self.xSample/self.factor), int(self.ySamples/self.factor), self.num_freq, random.choice(self.num_mics_list))
-
-        # # preprocessing
-        mask_downsampled = mask
-
-        irregular_sf, mask = utils.preprocessing(self.factor, initial_sf, mask)
-
-        irregular_sf = torch.from_numpy(irregular_sf)
-        mask = torch.from_numpy(mask)
-
-        if self.do_normalize:
-            irregular_sf = norm_sf_complex(irregular_sf)
-
-        sf_masked = torch.cat((irregular_sf, mask), dim=2) 
-        
-        sf_masked = torch.moveaxis(sf_masked, 2, 0) 
-        sf_gt = torch.moveaxis(torch.from_numpy(sf_gt), 2, 0)
-        if self.do_normalize:
-            sf_gt = norm_sf_complex(sf_gt)
-
-        # Return also room dimensions for plots
-        x_dim = float(self.soundfield_list[item].split('_')[5])
-        y_dim = float(self.soundfield_list[item].split('_')[6])
-
-        if self.return_dims:
-            if self.do_plot:
-                return sf_masked, sf_gt,mask_downsampled, x_dim, y_dim
-            else:
-                return sf_masked, sf_gt, x_dim, y_dim
-        else:
-            if self.do_plot:
-                return sf_masked, sf_gt, mask_downsampled
-            else:
-                return sf_masked, sf_gt
+        return sf_masked, sf_gt

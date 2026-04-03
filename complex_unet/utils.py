@@ -1,7 +1,6 @@
 import json
 import numpy as np
-import copy 
-import ipdb
+import copy
 import torch
 import os
 import matplotlib.pyplot as plt
@@ -153,52 +152,12 @@ def apply_mask(input_sf, mask):
 
     return input_sf
 
-def upsampling(up_factor, sf, mask):
-    """ Upsamples sound fields and masks given a upsampling factor.
+def upsampling(lr, lr_res, hr_res):
 
-        Args:
-        up_factor: int
-        input_sfs: np.ndarray
-        masks: np.ndarray
+    upsampled = np.zeros((hr_res, hr_res), dtype=lr.dtype)
+    scale = (hr_res - 1) / (lr_res - 1)
+    for r in range(lr_res):
+        for c in range(lr_res):
+            upsampled[round(r * scale), round(c * scale)] = lr[r, c]
 
-        Returns: np.ndarray, np.ndarray
-
-        """
-
-    
-    sf_up = []
-    
-    sf = np.swapaxes(sf, 2, 0)
-    mask = np.swapaxes(mask, 2, 0)
-    
-    for sf_slice in sf:
-        positions = np.repeat(range(1, sf_slice.shape[1]), up_factor-1) #positions in sf slice to put 1
-        sf_slice_up = np.insert(sf_slice, obj=positions, values=np.zeros(len(positions)), axis=1) 
-        sf_slice_up = np.transpose(np.insert(np.transpose(sf_slice_up),obj=positions,values=np.zeros(len(positions)), axis=1)) 
-        sf_slice_up = np.pad(sf_slice_up, (0,up_factor-1),  mode='constant', constant_values=0) 
-        sf_slice_up = np.roll(sf_slice_up, (up_factor-1)//2, axis=0)
-        sf_slice_up = np.roll(sf_slice_up, (up_factor-1)//2, axis=1)
-        sf_up.append(sf_slice_up) #len(sf_up) = 40, sf_slice_up shape [32, 32]
-
-    mask_slice = mask[0, :, :]
-    positions = np.repeat(range(1, mask_slice.shape[1]), up_factor-1) #positions in mask slice to put 0
-    mask_slice_up = np.insert(mask_slice, obj=positions,values=np.zeros(len(positions)), axis=1)
-    mask_slice_up = np.transpose(np.insert(np.transpose(mask_slice_up),obj=positions,values=np.zeros(len(positions)), axis=1))
-    mask_slice_up = np.pad(mask_slice_up, (0,up_factor-1),  mode='constant')
-    mask_slice_up = np.roll(mask_slice_up, (up_factor-1)//2, axis=0)
-    mask_slice_up = np.roll(mask_slice_up, (up_factor-1)//2, axis=1)
-    mask_slice_up = mask_slice_up[np.newaxis, :]
-    mask_up = np.repeat(mask_slice_up, mask.shape[0], axis=0) #len(sf_up) = 40, sf_slice_up shape [32, 32]
-
-
-        # batch_sf_up.append(sf_up)
-        # batch_mask_up.append(mask_up)
-
-    sf_up = np.asarray(sf_up)
-    sf_up = np.swapaxes(sf_up, 2, 0)
-
-    mask_up = np.asarray(mask_up)
-    mask_up = np.swapaxes(mask_up, 2, 0)
-    
-
-    return sf_up, mask_up
+    return upsampled
