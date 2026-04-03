@@ -113,7 +113,7 @@ def main():
 
 
     # Load Model and hyperparams
-    n_freq = sf_train.bins_per_room
+    n_freq = sf_train.ds.bins_per_room
     model = sfun.ComplexUnet(config["training"], n_freq)
     model = model.to(device)
 
