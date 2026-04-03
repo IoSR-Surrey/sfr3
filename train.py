@@ -1,9 +1,9 @@
 import warnings
 warnings.simplefilter("ignore")
 original_filterwarnings = warnings.filterwarnings
-def _filterwarnings(*args, **kwargs):
+def filterwarnings(*args, **kwargs):
     return original_filterwarnings(*args, **{**kwargs, 'append': True})
-warnings.filterwarnings = _filterwarnings
+warnings.filterwarnings = filterwarnings
 
 from pl_bolts.optimizers import LinearWarmupCosineAnnealingLR
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -94,16 +94,16 @@ class CSVHistoryLogger(pl.Callback):
     def __init__(self, save_dir):
         os.makedirs(save_dir, exist_ok=True)
         self.path = os.path.join(save_dir, "training_history.csv")
-        self._header_written = False
+        self.header_written = False
 
     @rank_zero_only
     def on_fit_start(self, trainer, pl_module):
         if trainer.ckpt_path is None:
             if os.path.exists(self.path):
                 os.remove(self.path)
-            self._header_written = False
+            self.header_written = False
         else:
-            self._header_written = os.path.exists(self.path)
+            self.header_written = os.path.exists(self.path)
 
     @rank_zero_only
     def on_train_epoch_end(self, trainer, pl_module):
@@ -116,12 +116,12 @@ class CSVHistoryLogger(pl.Callback):
             "val_loss": float(metrics.get("val_loss", float("nan"))),
             "lr": trainer.optimizers[0].param_groups[0]["lr"],
         }
-        mode = 'w' if not self._header_written else 'a'
+        mode = 'w' if not self.header_written else 'a'
         with open(self.path, mode, newline='') as f:
             writer = csv.DictWriter(f, fieldnames=row.keys())
-            if not self._header_written:
+            if not self.header_written:
                 writer.writeheader()
-                self._header_written = True
+                self.header_written = True
             writer.writerow(row)
 
 
