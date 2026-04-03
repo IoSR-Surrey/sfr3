@@ -1,23 +1,20 @@
 {
     "run": {
         "test": 0,
-         "gpu": "2"
+         "gpu": "0"
     },
     "dataset": {
-        "base_dir": "/nas/home/fronchini/complex-sound-field",
-        "log_dir": "/nas/home/fronchini/complex-sound-field/EUSIPCO/",
-        "full_dataset_path": "/nas/home/fronchini/complex-sound-field/dataset/train/T60-0.4-1.6",
-        "test_path": "/nas/home/fronchini/complex-sound-field/dataset/test_set",
-        "factor": 4,
-        "xSamples": 32,
-        "ySamples": 32,
-        "do_normalize": false, 
-        "num_mics_list": [5, 15, 35, 55]
+        "base_dir": ".",
+        "log_dir": "runs/",
+        "train_path": "../dataset_4to32_500_10krooms/train/metadata.json",
+        "val_path": "../dataset_4to32_500_10krooms/val/metadata.json",
+        "test_path": "../dataset_4to32_500_10krooms/test/metadata.json",
+        "do_normalize": false
     },
     "training": {
         "batch_size": 64,
         "num_epochs": 5000,
-        "session_id": "eusipco_large_64",
+        "session_id": "complexunet_4to32",
         "lr": 0.001,
         "loss": {
             "valid_weight": 1,
@@ -41,15 +38,5 @@
         "output": {
             "kernel_size": 1
         }
-    },
-    "evaluation": {
-        "min_mics": 5,
-        "max_mics": 65,
-        "step_mics": 5,
-        "num_comb": 1000
-    },
-    "visualization": {
-        "num_mics": 6,
-        "source": 0
     }
 }

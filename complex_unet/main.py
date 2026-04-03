@@ -96,28 +96,8 @@ def main():
 
     # load dataset
     if mode == 'train':
-        #if config["run"]["test"] == 1:
-            # sf_train = SoundFieldDataset(dataset_folder=cfg_dataset["train_path"], xSample=cfg_dataset["xSamples"],
-            #                              ySample=cfg_dataset["ySamples"], factor=cfg_dataset["factor"],do_normalize=do_normalize)
-            # sf_val = SoundFieldDataset(dataset_folder=cfg_dataset["val_path"], xSample=cfg_dataset["xSamples"],
-            #                            ySample=cfg_dataset["ySamples"], factor=cfg_dataset["factor"],do_normalize=do_normalize)
-            
-       # else:
-        dataset_filename_list = glob.glob(os.path.join(config["dataset"]["full_dataset_path"], "*.mat"))
-        
-        if config["run"]["test"] == 1:
-            # if it is a test, I take only 100 files
-            dataset_filename_list = glob.glob(os.path.join(config["dataset"]["full_dataset_path"], "*.mat"))[:100]
-        
-        sf_train_list, sf_val_list = train_test_split(dataset_filename_list, train_size=0.75, test_size=0.25,
-                                                          random_state=42)
-        
-            
-
-        sf_val = SoundFieldDataset(set_file_list=sf_val_list, xSample=cfg_dataset["xSamples"],
-                                       ySample=cfg_dataset["ySamples"], factor=cfg_dataset["factor"],do_normalize=do_normalize, num_mics_list=cfg_dataset["num_mics_list"])
-        sf_train = SoundFieldDataset(set_file_list=sf_train_list, xSample=cfg_dataset["xSamples"],
-                                         ySample=cfg_dataset["ySamples"], factor=cfg_dataset["factor"],do_normalize=do_normalize, num_mics_list=cfg_dataset["num_mics_list"])
+        sf_train = SoundFieldDataset(metadata_path=cfg_dataset["train_path"], do_normalize=do_normalize)
+        sf_val = SoundFieldDataset(metadata_path=cfg_dataset["val_path"], do_normalize=do_normalize)
 
         train_loader = torch.utils.data.DataLoader(sf_train,
                                                    shuffle=True,
@@ -133,7 +113,8 @@ def main():
 
 
     # Load Model and hyperparams
-    model = sfun.ComplexUnet(config["training"])
+    n_freq = sf_train.bins_per_room
+    model = sfun.ComplexUnet(config["training"], n_freq)
     model = model.to(device)
 
     def count_parameters(model):
@@ -160,7 +141,7 @@ def main():
             optimizer.zero_grad(set_to_none=True)
 
             y_pred = model(input_data)
-            mask = input_data[:, 40:, :, :]
+            mask = input_data[:, n_freq:, :, :]
 
             loss = soundfield_loss(mask, y_true, y_pred, valid_weight, hole_weight, device)
 
@@ -218,7 +199,7 @@ def main():
             for batch, (input_data, y_true) in enumerate(tqdm(val_loader)):
                 input_data = input_data.to(device)
                 y_pred = model(input_data)
-                mask = input_data[:, 40:, :, :]
+                mask = input_data[:, n_freq:, :, :]
 
                 # get only one random
                 loss = soundfield_loss(mask, y_true, y_pred, valid_weight, hole_weight, device)
