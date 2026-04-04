@@ -9,8 +9,12 @@ import argparse
 import random
 import torch
 import json
+import sys
 import csv
 import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "complex_unet"))
+from complex_unet.eval_complexunet import load_complexunet, complexunet_infer
 
 
 def compute_nmse(target, prediction):
@@ -98,6 +102,8 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     diffusion = lit.diffusion.to(device)
     diffusion.eval()
 
+    cvnn_model = load_complexunet(dataset, device)
+
     gt_hr, lr_low, freq = dataset[sample_index]
 
     kernel = UenoKernel(lr_res=dataset.lr_res, hr_res=dataset.hr_res)
@@ -114,6 +120,7 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     gt_mag = complex_to_magnitude(gt_hr.unsqueeze(0).to(device))
     sr_mag = complex_to_magnitude(sr_output)
     lr_mag = complex_to_magnitude(lr_low.unsqueeze(0).to(device))
+    cvnn_mag = complexunet_infer(cvnn_model, dataset, room_idx, bin_idx, device)
 
     target_size = (sr_mag.shape[-2], sr_mag.shape[-1])
     lr_complex = lr_low.unsqueeze(0).to(device)
@@ -123,22 +130,27 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     m = get_metrics(gt_mag, sr_mag)
     m_bic = get_metrics(gt_mag, bicubic_out)
     m_ker = get_metrics(gt_mag, kernel_mag)
+    m_cvnn = get_metrics(gt_mag, cvnn_mag)
     print(f"NMSE: {m['NMSE_dB']:.2f} dB | NCC: {m['NCC']:.2f}")
     print(f"Bicubic NMSE: {m_bic['NMSE_dB']:.2f} dB | Bicubic NCC: {m_bic['NCC']:.2f}")
     print(f"Kernel NMSE: {m_ker['NMSE_dB']:.2f} dB | Kernel NCC: {m_ker['NCC']:.2f}")
+    print(f"CVNN NMSE: {m_cvnn['NMSE_dB']:.2f} dB | NCC: {m_cvnn['NCC']:.2f}")
 
-    fig, axes = plt.subplots(1, 5, figsize=(25, 5))
+    fig, axes = plt.subplots(1, 6, figsize=(30, 5))
 
     axes[0].imshow(lr_mag[0, 0].cpu().numpy(), origin='lower')
     axes[0].set_title("Input (LR)")
+    axes[0].yaxis.get_major_locator().set_params(integer=True)
     axes[1].imshow(bicubic_out[0, 0].cpu().numpy(), origin='lower')
     axes[1].set_title("Bicubic Interpolation")
     axes[2].imshow(kernel_mag[0, 0].cpu().numpy(), origin='lower')
     axes[2].set_title("Ueno Kernel")
-    axes[3].imshow(sr_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[3].set_title("Generated (Diffusion)")
-    axes[4].imshow(gt_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[4].set_title("Ground Truth")
+    axes[3].imshow(cvnn_mag[0, 0].cpu().numpy(), origin='lower')
+    axes[3].set_title("CVNN")
+    axes[4].imshow(sr_mag[0, 0].cpu().numpy(), origin='lower')
+    axes[4].set_title("Generated (Diffusion)")
+    axes[5].imshow(gt_mag[0, 0].cpu().numpy(), origin='lower')
+    axes[5].set_title("Ground Truth")
     eval_dir = os.path.join(checkpoint_dir, "eval")
     os.makedirs(eval_dir, exist_ok=True)
     plt.suptitle(f"Room {room_idx} - Freq {freq_hz:.1f}Hz")
@@ -167,6 +179,8 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         model = lit.diffusion.denoise_fn.to(device)
         diffusion = lit.diffusion.to(device)
         diffusion.eval()
+
+        cvnn_model = load_complexunet(dataset, device)
 
         kernel = UenoKernel(lr_res=dataset.lr_res, hr_res=dataset.hr_res)
 
@@ -206,11 +220,13 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         avg_nmse_sr, avg_nmse_bic = [], []
         avg_ncc_sr, avg_ncc_bic = [], []
         avg_nmse_ker, avg_ncc_ker = [], []
+        avg_nmse_cvnn, avg_ncc_cvnn = [], []
 
         for bin_idx in tqdm(selected_bin_indices, desc="Processing bins"):
             b_nmse_sr, b_nmse_bic = [], []
             b_ncc_sr, b_ncc_bic = [], []
             b_nmse_ker, b_ncc_ker = [], []
+            b_nmse_cvnn, b_ncc_cvnn = [], []
 
             freq_hz = freqs_all[bin_idx]
 
@@ -237,9 +253,12 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
                 kernel_recon = kernel.reconstruct(lr_batch, freq_hz=float(freq_hz))
                 kernel_mag = complex_to_magnitude(kernel_recon.to(device))
 
+                cvnn_mag = complexunet_infer(cvnn_model, dataset, room_idx, int(bin_idx), device)
+
                 metrics_sr = get_metrics(gt_mag, sr_mag)
                 metrics_bic = get_metrics(gt_mag, bicubic_out)
                 metrics_ker = get_metrics(gt_mag, kernel_mag)
+                metrics_cvnn = get_metrics(gt_mag, cvnn_mag)
 
                 b_nmse_sr.append(metrics_sr['NMSE_dB'])
                 b_ncc_sr.append(metrics_sr['NCC'])
@@ -250,18 +269,24 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
                 b_nmse_ker.append(metrics_ker['NMSE_dB'])
                 b_ncc_ker.append(metrics_ker['NCC'])
 
+                b_nmse_cvnn.append(metrics_cvnn['NMSE_dB'])
+                b_ncc_cvnn.append(metrics_cvnn['NCC'])
+
             avg_nmse_sr.append(float(np.mean(b_nmse_sr)))
             avg_nmse_bic.append(float(np.mean(b_nmse_bic)))
             avg_ncc_sr.append(float(np.mean(b_ncc_sr)))
             avg_ncc_bic.append(float(np.mean(b_ncc_bic)))
             avg_nmse_ker.append(float(np.mean(b_nmse_ker)))
             avg_ncc_ker.append(float(np.mean(b_ncc_ker)))
+            avg_nmse_cvnn.append(float(np.mean(b_nmse_cvnn)))
+            avg_ncc_cvnn.append(float(np.mean(b_ncc_cvnn)))
 
             print(
                 f"\nFreq {freq_hz:.1f}Hz Done. "
                 f"Model NMSE: {avg_nmse_sr[-1]:.2f} dB | NCC: {avg_ncc_sr[-1]:.4f} | "
                 f"Bicubic NMSE: {avg_nmse_bic[-1]:.2f} dB | Bicubic NCC: {avg_ncc_bic[-1]:.4f} | "
-                f"Kernel NMSE: {avg_nmse_ker[-1]:.2f} dB | Kernel NCC: {avg_ncc_ker[-1]:.4f}"
+                f"Kernel NMSE: {avg_nmse_ker[-1]:.2f} dB | Kernel NCC: {avg_ncc_ker[-1]:.4f} | "
+                f"CVNN NMSE: {avg_nmse_cvnn[-1]:.2f} dB | CVNN NCC: {avg_ncc_cvnn[-1]:.4f}"
             )
 
         results = {
@@ -276,12 +301,14 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
             'nmse_dB': {
                 'diff_m': [float(x) for x in avg_nmse_sr],
                 'bic_m': [float(x) for x in avg_nmse_bic],
-                'ker_m': [float(x) for x in avg_nmse_ker]
+                'ker_m': [float(x) for x in avg_nmse_ker],
+                'cvnn_m': [float(x) for x in avg_nmse_cvnn]
             },
             'ncc': {
                 'diff_m': [float(x) for x in avg_ncc_sr],
                 'bic_m': [float(x) for x in avg_ncc_bic],
-                'ker_m': [float(x) for x in avg_ncc_ker]
+                'ker_m': [float(x) for x in avg_ncc_ker],
+                'cvnn_m': [float(x) for x in avg_ncc_cvnn]
             }
         }
         with open(json_path, "w") as jf:
@@ -303,6 +330,8 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         avg_ncc_bic = results['ncc']['bic_m']
         avg_nmse_ker = results['nmse_dB']['ker_m']
         avg_ncc_ker = results['ncc']['ker_m']
+        avg_nmse_cvnn = results['nmse_dB']['cvnn_m']
+        avg_ncc_cvnn = results['ncc']['cvnn_m']
 
     fig, ax = plt.subplots(1, 2, figsize=(11, 5), sharex=True)
 
@@ -310,6 +339,7 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
     ax[0].plot(x_axis, avg_nmse_sr, label='SFR3')
     ax[0].plot(x_axis, avg_nmse_bic, label='Bicubic', linestyle=':')
     ax[0].plot(x_axis, avg_nmse_ker, label='Kernel', linestyle='--')
+    ax[0].plot(x_axis, avg_nmse_cvnn, label='CVNN', linestyle='--')
     ax[0].set_ylabel("NMSE [dB]")
     ax[0].set_xlabel("Frequency [Hz]")
     ax[0].set_title("NMSE vs Freq")
@@ -319,6 +349,7 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
     ax[1].plot(x_axis, avg_ncc_sr, label='SFR3')
     ax[1].plot(x_axis, avg_ncc_bic, label='Bicubic', linestyle=':')
     ax[1].plot(x_axis, avg_ncc_ker, label='Kernel', linestyle='--')
+    ax[1].plot(x_axis, avg_ncc_cvnn, label='CVNN', linestyle='--')
     ax[1].set_ylabel("NCC")
     ax[1].set_xlabel("Frequency [Hz]")
     ax[1].set_ylim(bottom=0, top=1.05)
