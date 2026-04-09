@@ -2,7 +2,6 @@ from torch.utils.data import Dataset
 import os
 import sys
 import numpy as np
-import torchaudio
 import random
 import torch
 import glob
@@ -40,7 +39,7 @@ class SoundFieldDataset(Dataset):
         metadata_path,
         do_normalize=True,
     ):
-        self.ds = SFR3dataset(path=metadata_path)
+        self.ds = SFR3dataset(path=metadata_path, cvnn=True)
         self.hr_res = self.ds.hr_res
         self.lr_res = self.ds.lr_res
         self.do_normalize = do_normalize

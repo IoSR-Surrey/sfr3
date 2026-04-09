@@ -293,7 +293,7 @@ def generate_and_save_dataset(num_rooms=100, output_dir='.', basename='sound_fie
 
 
 class SoundFieldDataset(Dataset):
-    def __init__(self, path='metadata.json'):
+    def __init__(self, path='metadata.json', cvnn=False):
         with open(path, 'r') as f:
             meta = json.load(f)
         base_dir = os.path.dirname(os.path.abspath(path))
@@ -306,6 +306,8 @@ class SoundFieldDataset(Dataset):
         self.total_samples = self.num_rooms * self.bins_per_room
         self.fsampl = float(meta['fs'])
         self.n_fft = int(meta['n_fft'])
+
+        self.cvnn = cvnn
 
         self.f_min = self.fsampl / self.n_fft  # first bin (bin_index 0 + 1)
         max_freq_idx = int(np.ceil(float(meta['max_freq']) / float(meta['fs']) * float(meta['n_fft'])))
@@ -335,11 +337,12 @@ class SoundFieldDataset(Dataset):
         gt_hr = torch.from_numpy(arr_hr).float()
         lr_low = torch.from_numpy(arr_lr).float()
 
-        # ISOBEL-style scaling (Kristoffersen et al. 2021)
-        slice_max = torch.max(torch.abs(gt_hr))
-        # scales the values into the [-1, 1] range
-        gt_hr = gt_hr / slice_max
-        lr_low = lr_low / slice_max
+        if not self.cvnn:
+            # ISOBEL-style scaling (Kristoffersen et al. 2021)
+            slice_max = torch.max(torch.abs(gt_hr))
+            # scales the values into the [-1, 1] range
+            gt_hr = gt_hr / slice_max
+            lr_low = lr_low / slice_max
 
         freq_raw = ((bin_index + 1) * self.fsampl) / self.n_fft
         # min-max norm to [0, 1000] (like ddpm timestep)
