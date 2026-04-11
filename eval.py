@@ -82,6 +82,7 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     dataset = SoundFieldDataset(path=metadata_path)
+    cvnn_dataset = SoundFieldDataset(path=metadata_path, cvnn=True)
     with open(metadata_path) as f:
         meta = json.load(f)
     fs = meta['fs']
@@ -102,7 +103,7 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     diffusion = lit.diffusion.to(device)
     diffusion.eval()
 
-    cvnn_model = load_complexunet(dataset, device)
+    cvnn_model = load_complexunet(cvnn_dataset, device)
 
     gt_hr, lr_low, freq = dataset[sample_index]
 
@@ -120,7 +121,11 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     gt_mag = complex_to_magnitude(gt_hr.unsqueeze(0).to(device))
     sr_mag = complex_to_magnitude(sr_output)
     lr_mag = complex_to_magnitude(lr_low.unsqueeze(0).to(device))
-    cvnn_mag = complexunet_infer(cvnn_model, dataset, room_idx, bin_idx, device)
+    cvnn_mag = complexunet_infer(cvnn_model, cvnn_dataset, room_idx, bin_idx, device)
+
+    gt_hr_raw, _, _ = cvnn_dataset[sample_index]
+    slice_max = torch.max(torch.abs(gt_hr_raw)).to(device)
+    cvnn_mag_norm = cvnn_mag / slice_max
 
     target_size = (sr_mag.shape[-2], sr_mag.shape[-1])
     lr_complex = lr_low.unsqueeze(0).to(device)
@@ -130,7 +135,7 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     m = get_metrics(gt_mag, sr_mag)
     m_bic = get_metrics(gt_mag, bicubic_out)
     m_ker = get_metrics(gt_mag, kernel_mag)
-    m_cvnn = get_metrics(gt_mag, cvnn_mag)
+    m_cvnn = get_metrics(gt_mag, cvnn_mag_norm)
     print(f"NMSE: {m['NMSE_dB']:.2f} dB | NCC: {m['NCC']:.2f}")
     print(f"Bicubic NMSE: {m_bic['NMSE_dB']:.2f} dB | Bicubic NCC: {m_bic['NCC']:.2f}")
     print(f"Kernel NMSE: {m_ker['NMSE_dB']:.2f} dB | Kernel NCC: {m_ker['NCC']:.2f}")
@@ -174,13 +179,14 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         dataset = SoundFieldDataset(path=metadata_path)
+        cvnn_dataset = SoundFieldDataset(path=metadata_path, cvnn=True)
         ckpt_path = os.path.join(checkpoint_dir, "last.ckpt")
         lit = SR3DiffusionModule.load_from_checkpoint(ckpt_path, map_location=device)
         model = lit.diffusion.denoise_fn.to(device)
         diffusion = lit.diffusion.to(device)
         diffusion.eval()
 
-        cvnn_model = load_complexunet(dataset, device)
+        cvnn_model = load_complexunet(cvnn_dataset , device)
 
         kernel = UenoKernel(lr_res=dataset.lr_res, hr_res=dataset.hr_res)
 
@@ -253,12 +259,16 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
                 kernel_recon = kernel.reconstruct(lr_batch, freq_hz=float(freq_hz))
                 kernel_mag = complex_to_magnitude(kernel_recon.to(device))
 
-                cvnn_mag = complexunet_infer(cvnn_model, dataset, room_idx, int(bin_idx), device)
+                cvnn_mag = complexunet_infer(cvnn_model, cvnn_dataset , room_idx, int(bin_idx), device)
+
+                gt_hr_raw, _, _ = cvnn_dataset[room_idx * dataset.bins_per_room + int(bin_idx)]
+                slice_max = torch.max(torch.abs(gt_hr_raw)).to(device)
+                cvnn_mag_norm = cvnn_mag / slice_max
 
                 metrics_sr = get_metrics(gt_mag, sr_mag)
                 metrics_bic = get_metrics(gt_mag, bicubic_out)
                 metrics_ker = get_metrics(gt_mag, kernel_mag)
-                metrics_cvnn = get_metrics(gt_mag, cvnn_mag)
+                metrics_cvnn = get_metrics(gt_mag, cvnn_mag_norm)
 
                 b_nmse_sr.append(metrics_sr['NMSE_dB'])
                 b_ncc_sr.append(metrics_sr['NCC'])
@@ -365,7 +375,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--metadata", type=str, default="dataset_4to32_500_10krooms/test/metadata.json")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints_4to32_500_10krooms")
-    parser.add_argument("--seed", type=int, default=67)
+    parser.add_argument("--seed", type=int, default=6158)
     args = parser.parse_args()
 
     random.seed(args.seed)
