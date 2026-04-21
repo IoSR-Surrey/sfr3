@@ -141,25 +141,32 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     print(f"Kernel NMSE: {m_ker['NMSE_dB']:.2f} dB | Kernel NCC: {m_ker['NCC']:.2f}")
     print(f"CVNN NMSE: {m_cvnn['NMSE_dB']:.2f} dB | NCC: {m_cvnn['NCC']:.2f}")
 
-    fig, axes = plt.subplots(1, 6, figsize=(30, 5))
+    plt.rcParams['font.family'] = 'Times New Roman'
+    fig, axes = plt.subplots(1, 6, figsize=(12, 2))
 
     axes[0].imshow(lr_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[0].set_title("Input (LR)")
-    axes[0].yaxis.get_major_locator().set_params(integer=True)
+    axes[0].set_title("LR Grid (Input)", fontsize=12, fontweight='bold')
     axes[1].imshow(bicubic_out[0, 0].cpu().numpy(), origin='lower')
-    axes[1].set_title("Bicubic Interpolation")
+    axes[1].set_title("Bicubic", fontsize=12)
     axes[2].imshow(kernel_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[2].set_title("Ueno Kernel")
+    axes[2].set_title("Kernel", fontsize=12)
     axes[3].imshow(cvnn_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[3].set_title("CVNN")
+    axes[3].set_title("CVNN", fontsize=12)
     axes[4].imshow(sr_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[4].set_title("Generated (Diffusion)")
+    axes[4].set_title("SFR3", fontsize=12)
     axes[5].imshow(gt_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[5].set_title("Ground Truth")
+    axes[5].set_title("HR Grid (Target)", fontsize=12, fontweight='bold')
+
+    for ax in axes:
+        ax.set_aspect('equal')
+        ax.yaxis.get_major_locator().set_params(integer=True, nbins=4)
+        ax.xaxis.get_major_locator().set_params(integer=True, nbins=4)
+
     eval_dir = os.path.join(checkpoint_dir, "eval")
     os.makedirs(eval_dir, exist_ok=True)
-    plt.suptitle(f"Room {room_idx} - Freq {freq_hz:.1f}Hz")
-    plt.savefig(os.path.join(eval_dir, "gtgen_comparison.pdf"))
+    plt.tight_layout()
+    plt.subplots_adjust(wspace=0.08, hspace=0)
+    plt.savefig(os.path.join(eval_dir, "gtgen_comparison.pdf"), bbox_inches='tight', pad_inches=0)
     plt.show()
 
 
@@ -343,39 +350,63 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         avg_nmse_cvnn = results['nmse_dB']['cvnn_m']
         avg_ncc_cvnn = results['ncc']['cvnn_m']
 
-    fig, ax = plt.subplots(1, 2, figsize=(11, 5), sharex=True)
+    plt.rcParams.update({
+        'font.family': 'Times New Roman',
+        'font.size': 11,
+        'axes.labelsize': 11,
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
+        'legend.fontsize': 10,
+        'axes.linewidth': 0.8,
+        'figure.dpi': 150,
+        'pdf.fonttype': 42,
+        'ps.fonttype': 42,
+    })
+
+    colors = ['#0072B2', '#D55E00', '#009E73', '#C1292E']
+    styles = ['-', '--', '-.', ':']
+    labels = ['SFR3', 'Bicubic', 'Kernel', 'CVNN']
+
+    def plot_lines(ax, datasets):
+        for data, color, ls, label in zip(datasets, colors, styles, labels):
+            ax.plot(x_axis, data, label=label, color=color, linestyle=ls, linewidth=1.6)
 
     # NMSE [dB]
-    ax[0].plot(x_axis, avg_nmse_sr, label='SFR3')
-    ax[0].plot(x_axis, avg_nmse_bic, label='Bicubic', linestyle=':')
-    ax[0].plot(x_axis, avg_nmse_ker, label='Kernel', linestyle='--')
-    ax[0].plot(x_axis, avg_nmse_cvnn, label='CVNN', linestyle='--')
-    ax[0].set_ylabel("NMSE [dB]")
-    ax[0].set_xlabel("Frequency [Hz]")
-    ax[0].set_title("NMSE vs Freq")
-    ax[0].legend()
-    ax[0].grid(True, alpha=0.3)
+    fig_nmse, ax = plt.subplots(1, 1, figsize=(4, 3))
+    plot_lines(ax, [avg_nmse_sr, avg_nmse_bic, avg_nmse_ker, avg_nmse_cvnn])
+    ax.set_ylabel("NMSE [dB]")
+    ax.set_xlabel("Frequency [Hz]")
+    ax.set_ylim(-72, -5)
+    ax.grid(True, alpha=0.3, linewidth=0.5)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.legend(framealpha=0.9, edgecolor='0.8', fontsize=7, handlelength=2.4, handletextpad=0.5, borderpad=0.4)
+    fig_nmse.tight_layout()
+    fig_nmse.savefig(os.path.join(eval_dir, "freq_analysis_nmse.pdf"), bbox_inches='tight')
+
     # NCC
-    ax[1].plot(x_axis, avg_ncc_sr, label='SFR3')
-    ax[1].plot(x_axis, avg_ncc_bic, label='Bicubic', linestyle=':')
-    ax[1].plot(x_axis, avg_ncc_ker, label='Kernel', linestyle='--')
-    ax[1].plot(x_axis, avg_ncc_cvnn, label='CVNN', linestyle='--')
-    ax[1].set_ylabel("NCC")
-    ax[1].set_xlabel("Frequency [Hz]")
-    ax[1].set_ylim(bottom=0, top=1.05)
-    ax[1].set_title("NCC vs Freq")
-    ax[1].legend()
-    ax[1].grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(os.path.join(eval_dir, "freq_analysis_comparison.pdf"))
+    fig_ncc, ax = plt.subplots(1, 1, figsize=(4, 3))
+    plot_lines(ax, [avg_ncc_sr, avg_ncc_bic, avg_ncc_ker, avg_ncc_cvnn])
+    ax.set_ylabel("NCC")
+    ax.set_xlabel("Frequency [Hz]")
+    ax.set_ylim(bottom=0.91, top=1.01)
+    ax.legend(framealpha=0.9, edgecolor='0.8')
+    ax.grid(True, alpha=0.3, linewidth=0.5)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    fig_ncc.tight_layout()
+    fig_ncc.savefig(os.path.join(eval_dir, "freq_analysis_ncc.pdf"), bbox_inches='tight')
+
     plt.show()
+    plt.close(fig_nmse)
+    plt.close(fig_ncc)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--metadata", type=str, default="dataset_4to32_500_10krooms/test/metadata.json")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints_4to32_500_10krooms")
-    parser.add_argument("--seed", type=int, default=6158)
+    parser.add_argument("--seed", type=int, default=325)
     args = parser.parse_args()
 
     random.seed(args.seed)
