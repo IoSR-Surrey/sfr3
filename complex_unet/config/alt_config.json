@@ -1,0 +1,42 @@
+{
+    "run": {
+        "test": 0,
+         "gpu": "0"
+    },
+    "dataset": {
+        "base_dir": ".",
+        "log_dir": "runs/",
+        "train_path": "../datasets/dataset_8to64_1000/train/metadata.json",
+        "val_path": "../datasets/dataset_8to64_1000/val/metadata.json",
+        "test_path": "../datasets/dataset_8to64_1000/test/metadata.json",
+        "do_normalize": false
+    },
+    "training": {
+        "batch_size": 64,
+        "num_epochs": 5000,
+        "session_id": "complexunet_8to64",
+        "lr": 0.001,
+        "loss": {
+            "valid_weight": 1,
+            "hole_weight": 12
+        },
+        "encoder": {
+            "activation": "prelu",
+            "kernel_size": 3, 
+            "stride": 2,
+            "padding": 1,
+            "batch_norm": true
+        },
+        "decoder": {
+            "activation": "prelu",
+            "kernel_size": 3, 
+            "padding": 1,
+            "up_layer": "up", 
+            "scale_factor": 2,
+            "batch_norm": true
+        },
+        "output": {
+            "kernel_size": 1
+        }
+    }
+}
