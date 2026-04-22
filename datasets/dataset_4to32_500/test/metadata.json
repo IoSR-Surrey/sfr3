@@ -1,0 +1,13 @@
+{
+  "n_rooms": 500,
+  "bins_per_room": 64,
+  "hr_res": 32,
+  "lr_res": 4,
+  "fs": 16000.0,
+  "n_fft": 2048,
+  "len_rir": 2048,
+  "max_freq": 500,
+  "max_order": 30,
+  "npy_hr": "sound_field_test_hr.npy",
+  "npy_lr": "sound_field_test_lr.npy"
+}
