@@ -1,6 +1,10 @@
 <div align="center">
 
-# SuperFieldResolution3: SR3-based Sound Field Reconstruction 
+# Sound Field Reconstruction via Repeated Refinement: SR3-Based Room Transfer Function Interpolation Using Image Super-Resolution
+
+Author(s) Name(s)
+
+Author Affiliation(s)
 
 </div>
 
