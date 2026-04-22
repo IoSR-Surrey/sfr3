@@ -125,7 +125,7 @@ def run_single_inference(metadata_path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--metadata', type=str, default='dataset_4to32_500_10krooms/test/metadata.json')
+    parser.add_argument('--metadata', type=str, default='datasets/dataset_4to32_500/test/metadata.json') #alt: datasets/dataset_8to64_1000/test/metadata.json
     args = parser.parse_args()
 
     run_single_inference(args.metadata)

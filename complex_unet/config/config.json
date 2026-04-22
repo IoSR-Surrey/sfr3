@@ -6,9 +6,9 @@
     "dataset": {
         "base_dir": ".",
         "log_dir": "runs/",
-        "train_path": "../dataset_4to32_500_10krooms/train/metadata.json",
-        "val_path": "../dataset_4to32_500_10krooms/val/metadata.json",
-        "test_path": "../dataset_4to32_500_10krooms/test/metadata.json",
+        "train_path": "../datasets/dataset_4to32_500/train/metadata.json",
+        "val_path": "../datasets/dataset_4to32_500/val/metadata.json",
+        "test_path": "../datasets/dataset_4to32_500/test/metadata.json",
         "do_normalize": false
     },
     "training": {

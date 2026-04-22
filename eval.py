@@ -43,6 +43,7 @@ def complex_to_magnitude(x):
 def plot_training(checkpoints, show_lr=True):
 
     csv_path = os.path.join(checkpoints, 'training_history.csv')
+    eval_dir = os.path.join("evaluation", checkpoints.split("checkpoints_")[-1])
     epochs, train_losses, val_losses, lrs = [], [], [], []
     with open(csv_path, 'r') as file:
         reader = csv.DictReader(file)
@@ -75,6 +76,8 @@ def plot_training(checkpoints, show_lr=True):
 
     axes[-1, 0].set_xlabel('Epoch', fontsize=12)
     plt.tight_layout()
+    os.makedirs(eval_dir, exist_ok=True)
+    fig.savefig(os.path.join(eval_dir, f"training_history.pdf"), bbox_inches='tight')
     plt.show()
 
 
@@ -162,11 +165,13 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
         ax.yaxis.get_major_locator().set_params(integer=True, nbins=4)
         ax.xaxis.get_major_locator().set_params(integer=True, nbins=4)
 
-    eval_dir = os.path.join(checkpoint_dir, "eval")
+    eval_dir = os.path.join("evaluation", checkpoint_dir.split("checkpoints_")[-1])
     os.makedirs(eval_dir, exist_ok=True)
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.08, hspace=0)
-    plt.savefig(os.path.join(eval_dir, "gtgen_comparison.pdf"), bbox_inches='tight', pad_inches=0)
+    os.makedirs(eval_dir, exist_ok=True)
+    plt.savefig(os.path.join(eval_dir, f"gtgen_comparison_room{room_idx}_{int(round(freq_hz))}Hz.pdf"),
+                bbox_inches='tight', pad_inches=0)
     plt.show()
 
 
@@ -175,7 +180,7 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
     Run frequency analysis and compare diffusion SR to baselines
     """
 
-    eval_dir = os.path.join(checkpoint_dir, "eval")
+    eval_dir = os.path.join("evaluation", checkpoint_dir.split("checkpoints_")[-1])
     os.makedirs(eval_dir, exist_ok=True)
     json_path = os.path.join(eval_dir, "freq_analysis.json")
 
@@ -395,7 +400,7 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     fig_ncc.tight_layout()
-    fig_ncc.savefig(os.path.join(eval_dir, "freq_analysis_ncc.pdf"), bbox_inches='tight')
+    fig_ncc.savefig(os.path.join(eval_dir, f"freq_analysis_ncc.pdf"), bbox_inches='tight')
 
     plt.show()
     plt.close(fig_nmse)
@@ -404,8 +409,8 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--metadata", type=str, default="dataset_4to32_500_10krooms/test/metadata.json")
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints_4to32_500_10krooms")
+    parser.add_argument("--metadata", type=str, default="datasets/dataset_4to32_500/test/metadata.json") #alt: datasets/dataset_8to64_1000/test/metadata.json
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/checkpoints_4to32_500") #alt: checkpoints/checkpoints_8to64_1000
     parser.add_argument("--seed", type=int, default=325)
     args = parser.parse_args()
 

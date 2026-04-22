@@ -127,7 +127,7 @@ class CSVHistoryLogger(pl.Callback):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--suffix', dest='suffix', type=str, default="4to32_500_10krooms")
+    parser.add_argument('--suffix', dest='suffix', type=str, default="4to32_500") #alt: 8to64_100
     parser.add_argument('--resume', action='store_true', default=True)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--devices', type=int, default=1)
@@ -144,9 +144,9 @@ if __name__ == "__main__":
     pl.seed_everything(args.seed, workers=True)
 
     s = args.suffix.strip()
-    out_dir = f"checkpoints_{s}" if s else "checkpoints"
-    train_metadata = f"dataset_{s}/train/metadata.json" if s else "dataset/train/metadata.json"
-    val_metadata = f"dataset_{s}/val/metadata.json" if s else "dataset/val/metadata.json"
+    out_dir = f"checkpoints/checkpoints_{s}" if s else "checkpoints"
+    train_metadata = f"datasets/dataset_{s}/train/metadata.json" if s else "dataset/train/metadata.json"
+    val_metadata = f"datasets/dataset_{s}/val/metadata.json" if s else "dataset/val/metadata.json"
 
     datamodule = SoundFieldDataModule(train_metadata_path=train_metadata, val_metadata_path=val_metadata,
                                       batch_size=args.batch_size // (args.nodes * args.devices),

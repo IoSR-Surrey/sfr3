@@ -14,13 +14,13 @@ import os
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lowres', type=int, default=8)
-    parser.add_argument('--highres', type=int, default=64)
-    parser.add_argument('--maxfreq', type=int, default=1000)
+    parser.add_argument('--lowres', type=int, default=4) # alt: 8
+    parser.add_argument('--highres', type=int, default=32) # alt: 64
+    parser.add_argument('--maxfreq', type=int, default=500) # alt: 1000
     parser.add_argument('--len_rir', type=int, default=2048)
     parser.add_argument('--n_fft', type=int, default=2048)
     parser.add_argument('--fsampl', type=int, default=16000)
-    parser.add_argument('--out_dir', type=str, default='dataset_8to64_1000_10krooms')
+    parser.add_argument('--out_dir', type=str, default=os.path.join('datasets', 'dataset_4to32_500')) # alt: dataset_8to64_1000
     parser.add_argument('--generate', type=int, choices=[0,1], default=1)
     parser.add_argument('--show', type=int, choices=[0,1], default=1)
     parser.add_argument('--seed', type=int, default=None)
