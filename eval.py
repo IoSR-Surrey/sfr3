@@ -1,8 +1,11 @@
+from matplotlib.ticker import SymmetricalLogLocator
+from matplotlib.colors import SymLogNorm
 from train import SR3DiffusionModule
 from data import SoundFieldDataset
 import matplotlib.pyplot as plt
 from kernel import UenoKernel
 import torch.nn.functional
+import matplotlib as mpl
 from tqdm import tqdm
 import numpy as np
 import argparse
@@ -80,8 +83,80 @@ def plot_training(checkpoints, show_lr=True):
     fig.savefig(os.path.join(eval_dir, f"training_history.pdf"), bbox_inches='tight')
     plt.show()
 
+def plot_difference(gt_mag, pred_dict, eval_dir, room_idx, freq_hz):
+
+    mpl.rcParams.update({
+        'font.family': 'serif',
+        'font.serif': ['Times New Roman'],
+        'font.size': 11,
+        'axes.labelsize': 11,
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
+        'axes.linewidth': 0.8,
+        'figure.dpi': 150,
+        'pdf.fonttype': 42,
+        'ps.fonttype': 42,
+    })
+
+    gt_np = gt_mag.squeeze().cpu().numpy()
+    pred_np = {k: v.squeeze().cpu().numpy() for k, v in pred_dict.items()}
+    signed_diff = {k: pred_np[k] - gt_np for k in pred_dict}
+
+    diff_max = max(np.max(np.abs(v)) for v in signed_diff.values()) or 1.0
+    signed_norm = SymLogNorm(linthresh=diff_max * 0.02, vmin=-diff_max, vmax=diff_max, base=10)
+
+    fig, axes = plt.subplots(1, 6, figsize=(12, 2))
+    for ax in axes[:2]:
+        ax.set_in_layout(False)
+        ax.set_axis_off()
+    diff_axes = axes[2:]
+
+    for i, k in enumerate(pred_dict):
+        im = diff_axes[i].imshow(signed_diff[k], origin="lower", cmap="coolwarm", norm=signed_norm, extent=[0, 1, 0, 1])
+        diff_axes[i].set_title(f"{k} − GT", fontsize=12)
+        diff_axes[i].set_xlabel("x [m]", fontsize=9)
+        diff_axes[i].set_aspect('equal')
+        diff_axes[i].set_xlim(0, 1)
+        diff_axes[i].set_ylim(0, 1)
+        diff_axes[i].xaxis.set_major_locator(plt.MultipleLocator(0.5))
+        diff_axes[i].yaxis.set_major_locator(plt.MultipleLocator(0.5))
+    diff_axes[0].set_ylabel("y [m]", fontsize=9)
+
+    plt.subplots_adjust(left=0.05, right=0.98, top=0.88, bottom=0.15, wspace=0.08)
+
+    bb0, bb1 = axes[0].get_position(), axes[1].get_position()
+    cbar_w = (bb1.x1 - bb0.x0) * 0.7
+    cbar_h = bb0.height * 0.10
+    cbar_left = bb0.x0 + ((bb1.x1 - bb0.x0) - cbar_w) / 2
+    cbar_bottom = bb0.y0 + (bb0.height - cbar_h) / 2
+    cax = fig.add_axes([cbar_left, cbar_bottom, cbar_w, cbar_h])
+    cbar = fig.colorbar(im, cax=cax, orientation='horizontal')
+    locator = SymmetricalLogLocator(linthresh=signed_norm.linthresh, base=10)
+    ticks = [t for t in locator.tick_values(-diff_max, diff_max) if abs(t) > signed_norm.linthresh or t == 0]
+
+    cbar.ax.xaxis.set_major_locator(plt.FixedLocator(ticks))
+    cbar.ax.xaxis.set_minor_locator(plt.NullLocator())
+    cbar.ax.tick_params(labelsize=11, width=0.8, length=3)
+
+    os.makedirs(eval_dir, exist_ok=True)
+    fig.savefig(os.path.join(eval_dir, f"gtgen_difference_room{room_idx}_{int(round(freq_hz))}Hz.pdf"), bbox_inches='tight', pad_inches=0)
+    plt.show()
 
 def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="checkpoints"):
+
+    mpl.rcParams.update({
+        'font.family': 'serif',
+        'font.serif': ['Times New Roman'],
+        'font.size': 11,
+        'axes.labelsize': 11,
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
+        'axes.linewidth': 0.8,
+        'figure.dpi': 150,
+        'pdf.fonttype': 42,
+        'ps.fonttype': 42,
+    })
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     dataset = SoundFieldDataset(path=metadata_path)
@@ -147,32 +222,37 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     plt.rcParams['font.family'] = 'Times New Roman'
     fig, axes = plt.subplots(1, 6, figsize=(12, 2))
 
-    axes[0].imshow(lr_mag[0, 0].cpu().numpy(), origin='lower')
+    extent = [0, 1, 0, 1]  # dimensions are 1x1 m
+    axes[0].imshow(lr_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
     axes[0].set_title("LR Grid (Input)", fontsize=12, fontweight='bold')
-    axes[1].imshow(bicubic_out[0, 0].cpu().numpy(), origin='lower')
-    axes[1].set_title("Bicubic", fontsize=12)
-    axes[2].imshow(kernel_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[2].set_title("Kernel", fontsize=12)
-    axes[3].imshow(cvnn_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[3].set_title("CVNN", fontsize=12)
-    axes[4].imshow(sr_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[4].set_title("SFR3", fontsize=12)
-    axes[5].imshow(gt_mag[0, 0].cpu().numpy(), origin='lower')
-    axes[5].set_title("HR Grid (Target)", fontsize=12, fontweight='bold')
+    axes[1].imshow(gt_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
+    axes[1].set_title("HR Grid (Target)", fontsize=12, fontweight='bold')
+    axes[2].imshow(bicubic_out[0, 0].cpu().numpy(), origin='lower', extent=extent)
+    axes[2].set_title("Bicubic", fontsize=12)
+    axes[3].imshow(kernel_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
+    axes[3].set_title("Kernel", fontsize=12)
+    axes[4].imshow(cvnn_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
+    axes[4].set_title("CVNN", fontsize=12)
+    axes[5].imshow(sr_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
+    axes[5].set_title("SFR3", fontsize=12)
 
     for ax in axes:
         ax.set_aspect('equal')
-        ax.yaxis.get_major_locator().set_params(integer=True, nbins=4)
-        ax.xaxis.get_major_locator().set_params(integer=True, nbins=4)
+        ax.set_xlabel("x [m]", fontsize=9)
+        ax.xaxis.set_major_locator(plt.MultipleLocator(0.5))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(0.5))
+    axes[0].set_ylabel("y [m]", fontsize=9)
 
     eval_dir = os.path.join("evaluation", checkpoint_dir.split("checkpoints_")[-1])
     os.makedirs(eval_dir, exist_ok=True)
-    plt.tight_layout()
-    plt.subplots_adjust(wspace=0.08, hspace=0)
+    plt.subplots_adjust(left=0.05, right=0.98, top=0.88, bottom=0.15, wspace=0.08)
     os.makedirs(eval_dir, exist_ok=True)
     plt.savefig(os.path.join(eval_dir, f"gtgen_comparison_room{room_idx}_{int(round(freq_hz))}Hz.pdf"),
                 bbox_inches='tight', pad_inches=0)
     plt.show()
+
+    pred_dict = {"Bicubic": bicubic_out, "Kernel": kernel_mag, "CVNN": cvnn_mag_norm, "SFR3": sr_mag,}
+    plot_difference(gt_mag, pred_dict, eval_dir, room_idx, freq_hz)
 
 
 def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=None, seed=42, run_inference=False):
@@ -355,8 +435,9 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         avg_nmse_cvnn = results['nmse_dB']['cvnn_m']
         avg_ncc_cvnn = results['ncc']['cvnn_m']
 
-    plt.rcParams.update({
-        'font.family': 'Times New Roman',
+    mpl.rcParams.update({
+        'font.family': 'serif',
+        'font.serif': ['Times New Roman'],
         'font.size': 11,
         'axes.labelsize': 11,
         'xtick.labelsize': 10,
