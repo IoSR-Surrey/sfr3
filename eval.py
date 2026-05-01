@@ -226,7 +226,7 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     axes[0].imshow(lr_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
     axes[0].set_title("LR Grid (Input)", fontsize=12, fontweight='bold')
     axes[1].imshow(gt_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
-    axes[1].set_title("HR Grid (Target)", fontsize=12, fontweight='bold')
+    axes[1].set_title("HR Grid (GT)", fontsize=12, fontweight='bold')
     axes[2].imshow(bicubic_out[0, 0].cpu().numpy(), origin='lower', extent=extent)
     axes[2].set_title("Bicubic", fontsize=12)
     axes[3].imshow(kernel_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
@@ -492,7 +492,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--metadata", type=str, default="datasets/dataset_4to32_500/test/metadata.json") #alt: datasets/dataset_8to64_1000/test/metadata.json
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/checkpoints_4to32_500") #alt: checkpoints/checkpoints_8to64_1000
-    parser.add_argument("--seed", type=int, default=325)
+    parser.add_argument("--seed", type=int, default=325)  #alt: 156
     args = parser.parse_args()
 
     random.seed(args.seed)
