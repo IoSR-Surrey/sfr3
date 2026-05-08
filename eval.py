@@ -113,14 +113,14 @@ def plot_difference(gt_mag, pred_dict, eval_dir, room_idx, freq_hz):
 
     for i, k in enumerate(pred_dict):
         im = diff_axes[i].imshow(signed_diff[k], origin="lower", cmap="coolwarm", norm=signed_norm, extent=[0, 1, 0, 1])
-        diff_axes[i].set_title(f"{k} − GT", fontsize=12)
-        diff_axes[i].set_xlabel("x [m]", fontsize=9)
+        diff_axes[i].set_title(f"{k} − GT", fontsize=13)
+        diff_axes[i].set_xlabel("x [m]", fontsize=12)
         diff_axes[i].set_aspect('equal')
         diff_axes[i].set_xlim(0, 1)
         diff_axes[i].set_ylim(0, 1)
         diff_axes[i].xaxis.set_major_locator(plt.MultipleLocator(0.5))
         diff_axes[i].yaxis.set_major_locator(plt.MultipleLocator(0.5))
-    diff_axes[0].set_ylabel("y [m]", fontsize=9)
+    diff_axes[0].set_ylabel("y [m]", fontsize=12)
 
     plt.subplots_adjust(left=0.05, right=0.98, top=0.88, bottom=0.15, wspace=0.08)
 
@@ -128,15 +128,26 @@ def plot_difference(gt_mag, pred_dict, eval_dir, room_idx, freq_hz):
     cbar_w = (bb1.x1 - bb0.x0) * 0.7
     cbar_h = bb0.height * 0.10
     cbar_left = bb0.x0 + ((bb1.x1 - bb0.x0) - cbar_w) / 2
-    cbar_bottom = bb0.y0 + (bb0.height - cbar_h) / 2
-    cax = fig.add_axes([cbar_left, cbar_bottom, cbar_w, cbar_h])
-    cbar = fig.colorbar(im, cax=cax, orientation='horizontal')
+    mid = bb0.y0 + bb0.height / 2
+
+    #difference colorbar
+    cax_diff = fig.add_axes([cbar_left, mid - cbar_h * 3.5, cbar_w, cbar_h])
+    cbar_diff = fig.colorbar(im, cax=cax_diff, orientation='horizontal')
     locator = SymmetricalLogLocator(linthresh=signed_norm.linthresh, base=10)
     ticks = [t for t in locator.tick_values(-diff_max, diff_max) if abs(t) > signed_norm.linthresh or t == 0]
+    cbar_diff.ax.xaxis.set_major_locator(plt.FixedLocator(ticks))
+    cbar_diff.ax.xaxis.set_minor_locator(plt.NullLocator())
+    cbar_diff.ax.tick_params(labelsize=11, width=0.8, length=3)
+    cbar_diff.ax.set_title("Magnitude difference", fontsize=13, pad=6)
 
-    cbar.ax.xaxis.set_major_locator(plt.FixedLocator(ticks))
-    cbar.ax.xaxis.set_minor_locator(plt.NullLocator())
-    cbar.ax.tick_params(labelsize=11, width=0.8, length=3)
+    #magnitude colorbar
+    cax_val = fig.add_axes([cbar_left, mid + cbar_h * 2.5, cbar_w, cbar_h])
+    val_norm = mpl.colors.Normalize(vmin=0, vmax=1)
+    sm = mpl.cm.ScalarMappable(norm=val_norm, cmap='viridis')
+    sm.set_array([])
+    cbar_val = fig.colorbar(sm, cax=cax_val, orientation='horizontal')
+    cbar_val.ax.tick_params(labelsize=11, width=0.8, length=3)
+    cbar_val.ax.set_title("Magnitude", fontsize=13, pad=6)
 
     os.makedirs(eval_dir, exist_ok=True)
     fig.savefig(os.path.join(eval_dir, f"gtgen_difference_room{room_idx}_{int(round(freq_hz))}Hz.pdf"), bbox_inches='tight', pad_inches=0)
@@ -224,24 +235,24 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
 
     extent = [0, 1, 0, 1]  # dimensions are 1x1 m
     axes[0].imshow(lr_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
-    axes[0].set_title("LR Grid (Input)", fontsize=12, fontweight='bold')
+    axes[0].set_title("LR Grid (Input)", fontsize=13, fontweight='bold')
     axes[1].imshow(gt_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
-    axes[1].set_title("HR Grid (GT)", fontsize=12, fontweight='bold')
+    axes[1].set_title("HR Grid (GT)", fontsize=13, fontweight='bold')
     axes[2].imshow(bicubic_out[0, 0].cpu().numpy(), origin='lower', extent=extent)
-    axes[2].set_title("Bicubic", fontsize=12)
+    axes[2].set_title("Bicubic", fontsize=13)
     axes[3].imshow(kernel_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
-    axes[3].set_title("Kernel", fontsize=12)
+    axes[3].set_title("Kernel", fontsize=13)
     axes[4].imshow(cvnn_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
-    axes[4].set_title("CVNN", fontsize=12)
+    axes[4].set_title("CVNN", fontsize=13)
     axes[5].imshow(sr_mag[0, 0].cpu().numpy(), origin='lower', extent=extent)
-    axes[5].set_title("SFR3", fontsize=12)
+    axes[5].set_title("SFR3 (Proposed)", fontsize=13)
 
     for ax in axes:
         ax.set_aspect('equal')
-        ax.set_xlabel("x [m]", fontsize=9)
+        ax.set_xlabel("x [m]", fontsize=12)
         ax.xaxis.set_major_locator(plt.MultipleLocator(0.5))
         ax.yaxis.set_major_locator(plt.MultipleLocator(0.5))
-    axes[0].set_ylabel("y [m]", fontsize=9)
+    axes[0].set_ylabel("y [m]", fontsize=12)
 
     eval_dir = os.path.join("evaluation", checkpoint_dir.split("checkpoints_")[-1])
     os.makedirs(eval_dir, exist_ok=True)
@@ -458,7 +469,7 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
             ax.plot(x_axis, data, label=label, color=color, linestyle=ls, linewidth=1.6)
 
     # NMSE [dB]
-    fig_nmse, ax = plt.subplots(1, 1, figsize=(4, 3))
+    fig_nmse, ax = plt.subplots(1, 1, figsize=(4, 2.55))
     plot_lines(ax, [avg_nmse_sr, avg_nmse_bic, avg_nmse_ker, avg_nmse_cvnn])
     ax.set_ylabel("NMSE [dB]")
     ax.set_xlabel("Frequency [Hz]")
@@ -466,7 +477,8 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
     ax.grid(True, alpha=0.3, linewidth=0.5)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.legend(framealpha=0.9, edgecolor='0.8', fontsize=7, handlelength=2.4, handletextpad=0.5, borderpad=0.4)
+    ax.legend(framealpha=0.9, edgecolor='0.8', fontsize=9, handlelength=1.5, handletextpad=0.5, borderpad=0.25,
+              loc='lower right', bbox_to_anchor=(1.1, 0))
     fig_nmse.tight_layout()
     fig_nmse.savefig(os.path.join(eval_dir, "freq_analysis_nmse.pdf"), bbox_inches='tight')
 
