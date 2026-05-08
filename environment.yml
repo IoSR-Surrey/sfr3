@@ -21,3 +21,4 @@ dependencies:
       - scikit-learn==1.8.0
       - scikit-image==0.26.0
       - tqdm==4.67.3
+      - pytest==8.4.2
