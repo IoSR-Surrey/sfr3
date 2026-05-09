@@ -49,6 +49,8 @@ Activate the conda environment (if needed) and run:
 python -m pytest 
 ```
 
+The testing script compares [sinc interpolation](https://ieeexplore.ieee.org/abstract/document/1703848), which ideally assumes an infinite plane of uniformly positioned sensors on a grid, against the baselines contained in "[eval.py](https://github.com/IoSR-Surrey/sfr3/blob/master/eval.py)".
+
 ## Additional information
 
 For more details:
