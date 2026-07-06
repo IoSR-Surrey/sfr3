@@ -5,6 +5,7 @@ from data import SoundFieldDataset
 import matplotlib.pyplot as plt
 from kernel import UenoKernel
 import torch.nn.functional
+from scipy.stats import t
 import matplotlib as mpl
 from tqdm import tqdm
 import numpy as np
@@ -18,7 +19,6 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "complex_unet"))
 from complex_unet.eval_complexunet import load_complexunet, complexunet_infer
-
 
 def compute_nmse(target, prediction):
     """Returns the raw NMSE ratio (0 to 1+)."""
@@ -266,9 +266,12 @@ def evaluation(metadata_path='dataset/test/metadata.json', checkpoint_dir="check
     plot_difference(gt_mag, pred_dict, eval_dir, room_idx, freq_hz)
 
 
-def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=None, seed=42, run_inference=False):
+def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=None, seed=42,
+                       run_inference=False, show_ci=True, confidence=0.95):
     """
-    Run frequency analysis and compare diffusion SR to baselines
+    Run frequency analysis and compare diffusion SR to baselines.
+    show_ci : bool
+        draw shaded confidence interval band mean +- t_(confidence, n-1) * (std / sqrt(n))
     """
 
     eval_dir = os.path.join("evaluation", checkpoint_dir.split("checkpoints_")[-1])
@@ -330,6 +333,11 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         avg_ncc_sr, avg_ncc_bic = [], []
         avg_nmse_ker, avg_ncc_ker = [], []
         avg_nmse_cvnn, avg_ncc_cvnn = [], []
+
+        std_nmse_sr, std_nmse_bic = [], []
+        std_ncc_sr, std_ncc_bic = [], []
+        std_nmse_ker, std_ncc_ker = [], []
+        std_nmse_cvnn, std_ncc_cvnn = [], []
 
         for bin_idx in tqdm(selected_bin_indices, desc="Processing bins"):
             b_nmse_sr, b_nmse_bic = [], []
@@ -394,12 +402,21 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
             avg_nmse_cvnn.append(float(np.mean(b_nmse_cvnn)))
             avg_ncc_cvnn.append(float(np.mean(b_ncc_cvnn)))
 
+            std_nmse_sr.append(float(np.std(b_nmse_sr, ddof=1)))
+            std_nmse_bic.append(float(np.std(b_nmse_bic, ddof=1)))
+            std_ncc_sr.append(float(np.std(b_ncc_sr, ddof=1)))
+            std_ncc_bic.append(float(np.std(b_ncc_bic, ddof=1)))
+            std_nmse_ker.append(float(np.std(b_nmse_ker, ddof=1)))
+            std_ncc_ker.append(float(np.std(b_ncc_ker, ddof=1)))
+            std_nmse_cvnn.append(float(np.std(b_nmse_cvnn, ddof=1)))
+            std_ncc_cvnn.append(float(np.std(b_ncc_cvnn, ddof=1)))
+
             print(
                 f"\nFreq {freq_hz:.1f}Hz Done. "
-                f"Model NMSE: {avg_nmse_sr[-1]:.2f} dB | NCC: {avg_ncc_sr[-1]:.4f} | "
-                f"Bicubic NMSE: {avg_nmse_bic[-1]:.2f} dB | Bicubic NCC: {avg_ncc_bic[-1]:.4f} | "
-                f"Kernel NMSE: {avg_nmse_ker[-1]:.2f} dB | Kernel NCC: {avg_ncc_ker[-1]:.4f} | "
-                f"CVNN NMSE: {avg_nmse_cvnn[-1]:.2f} dB | CVNN NCC: {avg_ncc_cvnn[-1]:.4f}"
+                f"Model NMSE: {avg_nmse_sr[-1]:.2f}+-{std_nmse_sr[-1]:.2f} dB | NCC: {avg_ncc_sr[-1]:.4f}+-{std_ncc_sr[-1]:.4f} | "
+                f"Bicubic NMSE: {avg_nmse_bic[-1]:.2f}+-{std_nmse_bic[-1]:.2f} dB | Bicubic NCC: {avg_ncc_bic[-1]:.4f}+-{std_ncc_bic[-1]:.4f} | "
+                f"Kernel NMSE: {avg_nmse_ker[-1]:.2f}+-{std_nmse_ker[-1]:.2f} dB | Kernel NCC: {avg_ncc_ker[-1]:.4f}+-{std_ncc_ker[-1]:.4f} | "
+                f"CVNN NMSE: {avg_nmse_cvnn[-1]:.2f}+-{std_nmse_cvnn[-1]:.2f} dB | CVNN NCC: {avg_ncc_cvnn[-1]:.4f}+-{std_ncc_cvnn[-1]:.4f}"
             )
 
         results = {
@@ -415,13 +432,21 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
                 'diff_m': [float(x) for x in avg_nmse_sr],
                 'bic_m': [float(x) for x in avg_nmse_bic],
                 'ker_m': [float(x) for x in avg_nmse_ker],
-                'cvnn_m': [float(x) for x in avg_nmse_cvnn]
+                'cvnn_m': [float(x) for x in avg_nmse_cvnn],
+                'diff_std': [float(x) for x in std_nmse_sr],
+                'bic_std': [float(x) for x in std_nmse_bic],
+                'ker_std': [float(x) for x in std_nmse_ker],
+                'cvnn_std': [float(x) for x in std_nmse_cvnn],
             },
             'ncc': {
                 'diff_m': [float(x) for x in avg_ncc_sr],
                 'bic_m': [float(x) for x in avg_ncc_bic],
                 'ker_m': [float(x) for x in avg_ncc_ker],
-                'cvnn_m': [float(x) for x in avg_ncc_cvnn]
+                'cvnn_m': [float(x) for x in avg_ncc_cvnn],
+                'diff_std': [float(x) for x in std_ncc_sr],
+                'bic_std': [float(x) for x in std_ncc_bic],
+                'ker_std': [float(x) for x in std_ncc_ker],
+                'cvnn_std': [float(x) for x in std_ncc_cvnn],
             }
         }
         with open(json_path, "w") as jf:
@@ -429,6 +454,7 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         print(f"Comparison results written to: {json_path}")
 
         x_axis = freqs
+        n_rooms = len(selected_rooms)
 
     else:
         # load from JSON instead of running inference
@@ -445,6 +471,19 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
         avg_ncc_ker = results['ncc']['ker_m']
         avg_nmse_cvnn = results['nmse_dB']['cvnn_m']
         avg_ncc_cvnn = results['ncc']['cvnn_m']
+
+        # std fields may not exist in older result files; fall back to zeros
+        n_pts = len(x_axis)
+        std_nmse_sr = results['nmse_dB'].get('diff_std', [0.0] * n_pts)
+        std_nmse_bic = results['nmse_dB'].get('bic_std', [0.0] * n_pts)
+        std_nmse_ker = results['nmse_dB'].get('ker_std', [0.0] * n_pts)
+        std_nmse_cvnn = results['nmse_dB'].get('cvnn_std', [0.0] * n_pts)
+        std_ncc_sr = results['ncc'].get('diff_std', [0.0] * n_pts)
+        std_ncc_bic = results['ncc'].get('bic_std', [0.0] * n_pts)
+        std_ncc_ker = results['ncc'].get('ker_std', [0.0] * n_pts)
+        std_ncc_cvnn = results['ncc'].get('cvnn_std', [0.0] * n_pts)
+
+        n_rooms = results.get('meta', {}).get('num_rooms', None)
 
     mpl.rcParams.update({
         'font.family': 'serif',
@@ -464,13 +503,24 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
     styles = ['-', '--', '-.', ':']
     labels = ['SFR3', 'Bicubic', 'Kernel', 'CVNN']
 
-    def plot_lines(ax, datasets):
-        for data, color, ls, label in zip(datasets, colors, styles, labels):
-            ax.plot(x_axis, data, label=label, color=color, linestyle=ls, linewidth=1.6)
+    #draw shaded confidence interval band mean +-t(confidence, n-1)*(std/sqrt(n))
+    band_multiplier = None
+    if show_ci:
+        band_multiplier = t.ppf(1-(1-confidence)/2, df=n_rooms-1)/np.sqrt(n_rooms)
+    def plot_lines(ax, datasets, stds=None):
+        x = np.asarray(x_axis, dtype=float)
+        for i, (data, color, ls, label) in enumerate(zip(datasets, colors, styles, labels)):
+            data_arr = np.asarray(data, dtype=float)
+            ax.plot(x, data_arr, label=label, color=color, linestyle=ls, linewidth=1.6)
+            if band_multiplier is not None and stds is not None:
+                std_arr = np.asarray(stds[i], dtype=float)
+                band = std_arr * band_multiplier
+                ax.fill_between(x, data_arr - band, data_arr + band, color=color, alpha=0.15, linewidth=0)
 
     # NMSE [dB]
     fig_nmse, ax = plt.subplots(1, 1, figsize=(4, 2.55))
-    plot_lines(ax, [avg_nmse_sr, avg_nmse_bic, avg_nmse_ker, avg_nmse_cvnn])
+    plot_lines(ax, [avg_nmse_sr, avg_nmse_bic, avg_nmse_ker, avg_nmse_cvnn],
+               stds=[std_nmse_sr, std_nmse_bic, std_nmse_ker, std_nmse_cvnn])
     ax.set_ylabel("NMSE [dB]")
     ax.set_xlabel("Frequency [Hz]")
     ax.set_ylim(-72, -5)
@@ -484,7 +534,8 @@ def frequency_analysis(metadata_path, checkpoint_dir, num_rooms=None, bin_step=N
 
     # NCC
     fig_ncc, ax = plt.subplots(1, 1, figsize=(4, 3))
-    plot_lines(ax, [avg_ncc_sr, avg_ncc_bic, avg_ncc_ker, avg_ncc_cvnn])
+    plot_lines(ax, [avg_ncc_sr, avg_ncc_bic, avg_ncc_ker, avg_ncc_cvnn],
+               stds=[std_ncc_sr, std_ncc_bic, std_ncc_ker, std_ncc_cvnn])
     ax.set_ylabel("NCC")
     ax.set_xlabel("Frequency [Hz]")
     ax.set_ylim(bottom=0.91, top=1.01)
@@ -514,4 +565,4 @@ if __name__ == "__main__":
 
     plot_training(args.checkpoint_dir, show_lr=True)
     evaluation(args.metadata, args.checkpoint_dir)
-    frequency_analysis(args.metadata, args.checkpoint_dir, num_rooms=50, bin_step=1, run_inference=False)
+    frequency_analysis(args.metadata, args.checkpoint_dir, num_rooms=50, bin_step=1, run_inference=False, show_ci=True)
