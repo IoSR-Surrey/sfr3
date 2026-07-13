@@ -2,7 +2,7 @@
 
 # Sound Field Reconstruction on a Uniform Grid via<br>Diffusion-Based Image Super-Resolution
 
-[Riccardo Passoni](https://openresearch.surrey.ac.uk/esploro/profile/riccardo_passoni/overview)<sup>1</sup>, [Stefano Damiano](https://www.kuleuven.be/wieiswie/en/person/00148509)<sup>2</sup>, [Philip J.B. Jackson](https://www.surrey.ac.uk/people/philip-jackson)<sup>3</sup>, [Toon von Waterschoot](https://www.kuleuven.be/wieiswie/en/person/00042022)<sup>2</sup>, [Enzo De Sena](https://www.surrey.ac.uk/people/enzo-de-sena)<sup>1</sup>
+[Riccardo Passoni](https://openresearch.surrey.ac.uk/esploro/profile/riccardo_passoni/overview)<sup>1</sup>, [Stefano Damiano](https://www.kuleuven.be/wieiswie/en/person/00148509)<sup>2</sup>, [Philip J.B. Jackson](https://www.surrey.ac.uk/people/philip-jackson)<sup>3</sup>, [Toon van Waterschoot](https://www.kuleuven.be/wieiswie/en/person/00042022)<sup>2</sup>, [Enzo De Sena](https://www.surrey.ac.uk/people/enzo-de-sena)<sup>1</sup>
 
 <sup>1</sup> Institute of Sound Recording (IoSR), University of Surrey, Guildford, UK <br>
 <sup>2</sup> Dept. of Electrical Engineering (ESAT-STADIUS), KU Leuven, Leuven, Belgium <br>
