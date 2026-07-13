@@ -1,6 +1,6 @@
 <div align="center">
 
-# Sound Field Reconstruction via Repeated Refinement: SR3-Based Room Transfer Function Interpolation Using Image Super-Resolution
+# Sound Field Reconstruction on a Uniform Grid via<br>Diffusion-Based Image Super-Resolution
 
 [Riccardo Passoni](https://openresearch.surrey.ac.uk/esploro/profile/riccardo_passoni/overview)<sup>1</sup>, [Stefano Damiano](https://www.kuleuven.be/wieiswie/en/person/00148509)<sup>2</sup>, [Philip J.B. Jackson](https://www.surrey.ac.uk/people/philip-jackson)<sup>3</sup>, [Toon von Waterschoot](https://www.kuleuven.be/wieiswie/en/person/00042022)<sup>2</sup>, [Enzo De Sena](https://www.surrey.ac.uk/people/enzo-de-sena)<sup>1</sup>
 
@@ -17,7 +17,7 @@
 
 ## Abstract
 
-Accurately measuring the sound field inside of a room purely from real-world data is extremely time-consuming, as it requires a large number of measurements and expensive equipment. In the past decade, several purely physics and signal-processing-based techniques have been proposed to predict the sound field inside a region from a limited number of data points. More recently, data-driven methods have also been proven to be powerful tools for this task. In this work, SFR3 is proposed, a sound field reconstruction diffusion model leveraging Super-Resolution via Repeated Refinement (SR3), which reconstructs the real and imaginary parts of the sound field from a grid of uniformly spaced microphones over a certain region. The model's performance is compared to a naive baseline consisting of a bicubic interpolation, a kernel-based method commonly used for this task, and a data-driven approach, showing that the proposed method outperforms the aforementioned techniques, especially at lower frequencies.
+Accurately reconstructing the sound field inside of a room purely from real-world data is extremely time-consuming, requiring large measurement campaigns. In the past decade, several signal-processing-based techniques have been proposed to predict the sound field within a region from limited measurements. More recently, data-driven methods have also been proven to be powerful tools for this task. In this work, SFR3 (Sound Field Reconstruction via Repeated Refinement) is proposed, based on an existing diffusion image super-resolution model, which reconstructs the sound field from a grid of uniformly spaced microphones, in contrast to the randomized distribution assumed by several state-of-the-art techniques. The model's performance is compared to a naive baseline consisting of a bicubic interpolation, a kernel-based method commonly used for this task, and a data-driven approach using a complex-valued U-Net, showing that the proposed method outperforms, in terms of normalized mean squared error, the aforementioned techniques, especially at lower frequencies.
 
 ## Install & Usage
 
@@ -54,15 +54,15 @@ The testing script compares [sinc interpolation](https://ieeexplore.ieee.org/abs
 ## Additional information
 
 For more details:
-"[Sound Field Reconstruction via Repeated Refinement: SR3-Based Room Transfer Function Interpolation Using Image Super-Resolution](https://github.com/IoSR-Surrey/sfr3)" (Riccardo Passoni, Stefano Damiano, Philip J.B. Jackson, Toon van Waterschoot, Enzo De Sena)
+"[Sound Field Reconstruction on a Uniform Grid via Diffusion-Based Image Super-Resolution](https://github.com/IoSR-Surrey/sfr3)" (Riccardo Passoni, Stefano Damiano, Philip J.B. Jackson, Toon van Waterschoot, Enzo De Sena)
 
 If you use code or comments from this work, please cite:
 
 ```BibTex
-@misc{placeholder,
-  title = {sfr3},
-  author = {of Sound Recording, Institute},
-  year = {2026},
-  url = {https://github.com/IoSR-Surrey/sfr3}
+@INPROCEEDINGS{sfr3,
+  author={Passoni, Riccardo and Damiano, Stefano and Philip Jackson, J.B. and van Waterschoot, Toon and De Sena, Enzo},
+  booktitle={2026 19th International Workshop on Acoustic Signal Enhancement (IWAENC)}, 
+  title={Sound Field Reconstruction on a Uniform Grid via Diffusion-Based Image Super-Resolution}, 
+  year={2026},
 }
 ```
