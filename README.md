@@ -54,13 +54,14 @@ The testing script compares [sinc interpolation](https://ieeexplore.ieee.org/abs
 ## Additional information
 
 For more details:
-"[Sound Field Reconstruction on a Uniform Grid via Diffusion-Based Image Super-Resolution](https://github.com/IoSR-Surrey/sfr3)" (Riccardo Passoni, Stefano Damiano, Philip J.B. Jackson, Toon van Waterschoot, Enzo De Sena)
+"[Sound Field Reconstruction on a Uniform Grid via Diffusion-Based Image Super-Resolution](https://iwaenc2026.org/program/poster_88.html)" (Riccardo Passoni, Stefano Damiano, Philip J.B. Jackson, Toon van Waterschoot, Enzo De Sena)
 
 If you use code or comments from this work, please cite:
 
 ```BibTex
 @INPROCEEDINGS{sfr3,
-  author={Passoni, Riccardo and Damiano, Stefano and Philip Jackson, J.B. and van Waterschoot, Toon and De Sena, Enzo},
+  author={Passoni, Riccardo and Damiano, Stefano and Philip Jackson, J.B. and
+          van Waterschoot, Toon and De Sena, Enzo},
   booktitle={2026 19th International Workshop on Acoustic Signal Enhancement (IWAENC)}, 
   title={Sound Field Reconstruction on a Uniform Grid via Diffusion-Based Image Super-Resolution}, 
   year={2026},
